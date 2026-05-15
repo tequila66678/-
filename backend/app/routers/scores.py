@@ -44,8 +44,9 @@ def batch_save_scores(
 
     for entry in data.scores:
         event = db.query(SportEvent).get(entry.event_id)
+        student = db.query(Student).get(entry.student_id)
         standards = db.query(ScoringStandard).filter(ScoringStandard.event_id == entry.event_id).all()
-        earned = calculate_score(entry.raw_value, event, standards)
+        earned = calculate_score(entry.raw_value, event, standards, student.gender.value if student else None)
 
         prev = _get_previous_score(db, entry.student_id, entry.event_id, entry.test_date)
         prev_score = None
@@ -337,13 +338,14 @@ def export_student_scores(
 @router.get("/student-list/{class_id}")
 def get_class_students(
     class_id: int,
+    event_id: int = Query(None),
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    students = (
-        db.query(Student)
-        .filter(Student.class_id == class_id)
-        .order_by(Student.student_id)
-        .all()
-    )
+    q = db.query(Student).filter(Student.class_id == class_id)
+    if event_id:
+        event = db.query(SportEvent).get(event_id)
+        if event and event.gender.value != "both":
+            q = q.filter(Student.gender == event.gender)
+    students = q.order_by(Student.student_id).all()
     return [{"id": s.id, "student_id": s.student_id, "name": s.name, "gender": s.gender.value} for s in students]

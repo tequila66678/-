@@ -1,8 +1,9 @@
-"""Seed default data: admin account, sport events with scoring standards, config."""
+"""Seed default data: admin account, sport events with gender-separated scoring standards, config."""
 from .database import SessionLocal
 from .models import Admin, SportEvent, ScoringStandard, SystemConfig, Gender, InputFormat
 from .auth import hash_password
 
+# Female standards (score 10 down to 1)
 FEMALE_STANDARDS = {
     "800米跑": ["3'25", "3'35", "3'45", "3'55", "4'05", "4'15", "4'25", "4'35", "4'45", "4'55"],
     "足球运球": ["10.1", "11.0", "11.9", "12.9", "14.4", "15.4", "16.8", "17.7", "18.6", "19.7"],
@@ -15,6 +16,7 @@ FEMALE_STANDARDS = {
     "游泳": ["100", "90", "80", "70", "60", "50", "40", "30", "25", "1"],
 }
 
+# Male standards (score 10 down to 1)
 MALE_STANDARDS = {
     "1000米跑": ["3'40", "3'50", "4'00", "4'10", "4'20", "4'30", "4'40", "4'50", "5'00", "5'10"],
     "足球运球": ["9.1", "10.0", "10.7", "11.5", "12.8", "13.6", "14.6", "15.2", "15.9", "16.8"],
@@ -27,18 +29,19 @@ MALE_STANDARDS = {
     "游泳": ["100", "90", "80", "70", "60", "50", "40", "30", "25", "1"],
 }
 
+# Event metadata: name -> (gender_applies_to, higher_better, unit, input_format, sort_order)
 EVENT_META = {
-    "800米跑": {"gender": Gender.F, "higher_better": False, "unit": "分'秒", "input_format": InputFormat.time_ms, "sort_order": 1},
-    "1000米跑": {"gender": Gender.M, "higher_better": False, "unit": "分'秒", "input_format": InputFormat.time_ms, "sort_order": 1},
-    "足球运球": {"gender": Gender.both, "higher_better": False, "unit": "秒", "input_format": InputFormat.decimal_seconds, "sort_order": 2},
-    "50米跑": {"gender": Gender.both, "higher_better": False, "unit": "秒", "input_format": InputFormat.decimal_seconds, "sort_order": 3},
-    "立定跳远": {"gender": Gender.both, "higher_better": True, "unit": "米", "input_format": InputFormat.decimal_meters, "sort_order": 4},
-    "一分钟跳绳": {"gender": Gender.both, "higher_better": True, "unit": "次", "input_format": InputFormat.integer, "sort_order": 5},
-    "掷实心球": {"gender": Gender.both, "higher_better": True, "unit": "米", "input_format": InputFormat.decimal_meters, "sort_order": 6},
-    "篮球运球投篮": {"gender": Gender.both, "higher_better": False, "unit": "秒", "input_format": InputFormat.decimal_seconds, "sort_order": 7},
-    "一分钟仰卧起坐": {"gender": Gender.F, "higher_better": True, "unit": "次", "input_format": InputFormat.integer, "sort_order": 8},
-    "引体向上": {"gender": Gender.M, "higher_better": True, "unit": "个", "input_format": InputFormat.integer, "sort_order": 8},
-    "游泳": {"gender": Gender.both, "higher_better": True, "unit": "米", "input_format": InputFormat.integer, "sort_order": 9},
+    "800米跑": (Gender.F, False, "分'秒", InputFormat.time_ms, 1),
+    "1000米跑": (Gender.M, False, "分'秒", InputFormat.time_ms, 1),
+    "足球运球": (Gender.both, False, "秒", InputFormat.decimal_seconds, 2),
+    "50米跑": (Gender.both, False, "秒", InputFormat.decimal_seconds, 3),
+    "立定跳远": (Gender.both, True, "米", InputFormat.decimal_meters, 4),
+    "一分钟跳绳": (Gender.both, True, "次", InputFormat.integer, 5),
+    "掷实心球": (Gender.both, True, "米", InputFormat.decimal_meters, 6),
+    "篮球运球投篮": (Gender.both, False, "秒", InputFormat.decimal_seconds, 7),
+    "一分钟仰卧起坐": (Gender.F, True, "次", InputFormat.integer, 8),
+    "引体向上": (Gender.M, True, "个", InputFormat.integer, 8),
+    "游泳": (Gender.both, True, "米", InputFormat.integer, 9),
 }
 
 def seed():
@@ -58,25 +61,34 @@ def seed():
     )
     db.add(admin)
 
-    # Sport events with standards
-    for name, meta in EVENT_META.items():
+    # Sport events with gender-separated standards
+    for name, (gender, higher_better, unit, input_fmt, sort_order) in EVENT_META.items():
         event = SportEvent(
             name=name,
-            gender=meta["gender"],
-            higher_better=meta["higher_better"],
-            unit=meta["unit"],
-            input_format=meta["input_format"],
-            sort_order=meta["sort_order"]
+            gender=gender,
+            higher_better=higher_better,
+            unit=unit,
+            input_format=input_fmt,
+            sort_order=sort_order
         )
         db.add(event)
         db.flush()
 
-        if name in FEMALE_STANDARDS:
+        # Add female standards if this event applies to females
+        if gender in (Gender.F, Gender.both) and name in FEMALE_STANDARDS:
             for i, val in enumerate(FEMALE_STANDARDS[name]):
-                db.add(ScoringStandard(event_id=event.id, score=10 - i, standard_value=val))
-        if name in MALE_STANDARDS:
+                db.add(ScoringStandard(
+                    event_id=event.id, gender=Gender.F,
+                    score=10 - i, standard_value=val
+                ))
+
+        # Add male standards if this event applies to males
+        if gender in (Gender.M, Gender.both) and name in MALE_STANDARDS:
             for i, val in enumerate(MALE_STANDARDS[name]):
-                db.add(ScoringStandard(event_id=event.id, score=10 - i, standard_value=val))
+                db.add(ScoringStandard(
+                    event_id=event.id, gender=Gender.M,
+                    score=10 - i, standard_value=val
+                ))
 
     # System config
     configs = [

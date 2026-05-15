@@ -1,0 +1,5 @@
+[0507/083545.113:INFO:render_frame_host_impl.cc(11654)] RenderFrameHostImpl::MaybeGenerateCrashReport url = , status = 4, exit_code = 0
+[0507/092406.519:INFO:CONSOLE(35)] "Service worker is active.", source: https://static.lilithgame.com/p/pc-park-login-cn/2.1.0/umi.d393b380.js (35)
+[0507/092406.519:INFO:CONSOLE(35)] "Service worker has been registered.", source: https://static.lilithgame.com/p/pc-park-login-cn/2.1.0/umi.d393b380.js (35)
+[0507/092407.050:INFO:CONSOLE(33)] "limNativeBridge, get cb data from native: GetHistoricalAccount [object Object]", source: https://static.lilithgame.com/p/pc-park-login-cn/2.1.0/umi.d393b380.js (33)
+[0507/092407.051:INFO:CONSOLE(33)] "limNativeBridge, get cb data from native: LoginInit [object Object]", source: https://static.lilithgame.com/p/pc-park-login-cn/2.1.0/umi.d393b380.js (33)

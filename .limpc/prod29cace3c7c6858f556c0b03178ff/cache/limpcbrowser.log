@@ -1,0 +1,80 @@
+Level: Info
+Message: limNativeBridge, get cb data from native: LoginInit [object Object]
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/628.db5e5834.async.js
+Line: 2
+-----------------------
+Level: Info
+Message: loginInitData.... [object Object]
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/839.6e593a9d.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: Service worker has been registered.
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/umi.f0355a0f.js
+Line: 16
+-----------------------
+Level: Info
+Message: New content is downloading.
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/umi.f0355a0f.js
+Line: 16
+-----------------------
+Level: Info
+Message: Content has been cached for offline use.
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/umi.f0355a0f.js
+Line: 16
+-----------------------
+Level: Info
+Message: Service worker is active.
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/umi.f0355a0f.js
+Line: 16
+-----------------------
+Level: Info
+Message: 登录成功 {"access_token":"1t1nPvd5N7IxW5hjPcOGiZcDPu5QIuIh","app_token":"iucFVMv5buXhnRyfuk2hd9aTNwBmqk8z","app_uid":1216180,"bindings":[1,0],"charge_limit":{"is_safe":1,"limit_devices":4},"gm_openid":"1173112-1216180","identity":{"age_level":4,"is_adult":true,"is_rn":true},"ip":"112.15.142.98","is_reg":false,"lilith_bindings":[{"access_token":"1t1nPvd5N7IxW5hjPcOGiZcDPu5QIuIh","has_pass":false,"id":"183******17","lilith_id":4884368,"type":1}],"pgs_nickname":"","region":"CN","rest_points":0,"sdk_region":"lilith_official","svr_time":1704169773,"uid":4884368}
+Source: https://static.lilithgame.com/p/pc-park-login-cn/1.8.1/p__login__index.91d4cc6c.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: login [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverMessage [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverIMMessages [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverMessage [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverIMMessages [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverMessage [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverIMMessages [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverMessage [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------
+Level: Info
+Message: serverIMMessages [object Object]
+Source: https://psp-cn.lilithgame.com/web-mono-ingame/p__self-service__gift-replay~p__self-service__problem-feedback__feedback-details__problem~p__self-se~db40c6ac.800a1fe1.async.js
+Line: 1
+-----------------------

@@ -21,12 +21,18 @@ def parse_standard_value(val: str, input_format: InputFormat) -> float:
     """Parse a standard value string the same way as parse_value."""
     return parse_value(val, input_format)
 
-def calculate_score(raw_value: str, event: SportEvent, standards: list[ScoringStandard]) -> int:
-    """Calculate earned score (1-10) using lower-score-when-between rule."""
+def calculate_score(raw_value: str, event: SportEvent, standards: list[ScoringStandard], student_gender: str = None) -> int:
+    """Calculate earned score (1-10) using lower-score-when-between rule. Filters standards by student gender."""
     parsed = parse_value(raw_value, event.input_format)
 
+    # Filter standards by student gender
+    if student_gender:
+        filtered = [s for s in standards if s.gender.value == student_gender or s.gender.value == "both"]
+    else:
+        filtered = standards
+
     std_pairs = []
-    for s in standards:
+    for s in filtered:
         std_pairs.append((s.score, parse_standard_value(s.standard_value, event.input_format)))
 
     std_pairs.sort(key=lambda x: x[0], reverse=True)

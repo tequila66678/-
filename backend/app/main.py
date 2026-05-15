@@ -33,7 +33,21 @@ app.include_router(student_portal_router.router)
 
 @app.on_event("startup")
 def startup():
+    from sqlalchemy import inspect, text
     Base.metadata.create_all(bind=engine)
+
+    # Check if schema needs migration (add gender column to scoring_standards)
+    insp = inspect(engine)
+    if "scoring_standards" in insp.get_table_names():
+        cols = [c["name"] for c in insp.get_columns("scoring_standards")]
+        if "gender" not in cols:
+            # Drop and recreate standards table
+            with engine.connect() as conn:
+                conn.execute(text("DROP TABLE IF EXISTS scoring_standards"))
+                conn.execute(text("DROP TABLE IF EXISTS scores"))
+                conn.commit()
+            Base.metadata.create_all(bind=engine)
+
     # Auto-seed on first deploy if no admin exists
     from .database import SessionLocal
     from .models import Admin

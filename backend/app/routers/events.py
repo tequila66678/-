@@ -54,7 +54,8 @@ def update_standards(
         raise HTTPException(status_code=404, detail="项目不存在")
     db.query(ScoringStandard).filter(ScoringStandard.event_id == event_id).delete()
     for s in standards:
-        std = ScoringStandard(event_id=event_id, score=s.score, standard_value=s.standard_value)
+        gender_val = s.gender if s.gender in ("M", "F", "both") else "both"
+        std = ScoringStandard(event_id=event_id, gender=gender_val, score=s.score, standard_value=s.standard_value)
         db.add(std)
     db.commit()
     return {"ok": True, "count": len(standards)}

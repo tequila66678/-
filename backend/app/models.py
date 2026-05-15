@@ -48,6 +48,7 @@ class ScoringStandard(Base):
     __tablename__ = "scoring_standards"
     id = Column(Integer, primary_key=True, autoincrement=True)
     event_id = Column(Integer, ForeignKey("sport_events.id"), nullable=False)
+    gender = Column(SqlEnum(Gender), nullable=False, default="both")
     score = Column(Integer, nullable=False)
     standard_value = Column(String, nullable=False)
     event = relationship("SportEvent", back_populates="standards")

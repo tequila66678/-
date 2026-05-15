@@ -54,11 +54,13 @@ class ClassOut(BaseModel):
 # SportEvent
 class ScoringStandardOut(BaseModel):
     id: int
+    gender: str = "both"
     score: int
     standard_value: str
     model_config = {"from_attributes": True}
 
 class ScoringStandardUpdate(BaseModel):
+    gender: str = "both"
     score: int
     standard_value: str
 

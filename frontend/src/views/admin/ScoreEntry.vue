@@ -129,7 +129,9 @@ onMounted(async () => {
 })
 
 async function startEntry() {
-  const res = await api.get(`/scores/student-list/${selectedClassId.value}`)
+  const res = await api.get(`/scores/student-list/${selectedClassId.value}`, {
+    params: { event_id: selectedEventId.value }
+  })
   students.value = res.data
   currentIndex.value = 0
   currentValue.value = ''

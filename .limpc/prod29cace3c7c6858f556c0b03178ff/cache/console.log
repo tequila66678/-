@@ -1,0 +1,34 @@
+[0102/122510.224:ERROR:browser_host_create.cc(75)] Creating a windowless browser without setting CefSettings.windowless_rendering_enabled may result in reduced performance or runtime errors.
+[0102/122709.877:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0102/152729.408:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0103/093227.136:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0105/121518.820:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0105/132738.444:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0105/161211.542:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0109/121212.330:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0109/122626.829:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0109/142725.037:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0109/152127.891:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0112/120841.522:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0112/160423.771:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0117/172006.906:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0118/100320.906:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0119/100836.012:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0119/105434.580:ERROR:browser_host_create.cc(75)] Creating a windowless browser without setting CefSettings.windowless_rendering_enabled may result in reduced performance or runtime errors.
+[0119/111650.775:ERROR:browser_host_create.cc(75)] Creating a windowless browser without setting CefSettings.windowless_rendering_enabled may result in reduced performance or runtime errors.
+[0119/123343.345:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0123/152427.937:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0125/134924.702:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0226/151821.236:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0326/133506.351:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0409/160205.089:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0419/122436.786:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0507/100442.081:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0508/100519.965:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0509/084858.815:ERROR:gpu_init.cc(486)] Passthrough is not supported, GL is disabled, ANGLE is 
+[1225/085059.227:ERROR:network_service_instance_impl.cc(461)] Network service crashed, restarting service.
+[1225/085059.230:ERROR:gpu_process_host.cc(965)] GPU process exited unexpectedly: exit_code=1073807364
+[1225/085059.230:WARNING:gpu_process_host.cc(1267)] The GPU process has crashed 1 time(s)
+[1231/200900.924:ERROR:network_service_instance_impl.cc(461)] Network service crashed, restarting service.
+[1231/200900.926:ERROR:gpu_process_host.cc(965)] GPU process exited unexpectedly: exit_code=1073807364
+[1231/200900.926:WARNING:gpu_process_host.cc(1267)] The GPU process has crashed 1 time(s)
