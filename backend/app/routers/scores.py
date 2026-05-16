@@ -338,7 +338,6 @@ def export_student_scores(
         headers={"Content-Disposition": f"attachment; filename={s.name}_{s.student_id}_scores.xlsx"}
     )
 
-@router.get("/student-list/{class_id}")
 @router.get("/school-stats")
 def school_stats(
     event_ids: Optional[str] = Query(None),
@@ -574,6 +573,7 @@ def export_download(
     )
 
 
+@router.get("/student-list/{class_id}")
 def get_class_students(
     class_id: int,
     event_id: int = Query(None),
