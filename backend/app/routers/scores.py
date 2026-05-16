@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig
+from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat
 from ..schemas import ScoreBatchSave, ScoreWithChange
 from ..auth import get_current_admin
-from ..scoring import calculate_score
+from ..scoring import calculate_score, normalize_time_ms
 import openpyxl
 from io import BytesIO
 from datetime import date
@@ -45,8 +45,11 @@ def batch_save_scores(
     for entry in data.scores:
         event = db.query(SportEvent).get(entry.event_id)
         student = db.query(Student).get(entry.student_id)
+        raw_value = entry.raw_value
+        if event and event.input_format == InputFormat.time_ms:
+            raw_value = normalize_time_ms(raw_value)
         standards = db.query(ScoringStandard).filter(ScoringStandard.event_id == entry.event_id).all()
-        earned = calculate_score(entry.raw_value, event, standards, student.gender.value if student else None)
+        earned = calculate_score(raw_value, event, standards, student.gender.value if student else None)
 
         prev = _get_previous_score(db, entry.student_id, entry.event_id, entry.test_date)
         prev_score = None
@@ -68,7 +71,7 @@ def batch_save_scores(
             ).first()
         )
         if existing:
-            existing.raw_value = entry.raw_value
+            existing.raw_value = raw_value
             existing.earned_score = earned
             existing.recorder_id = current.id
             score_obj = existing
@@ -76,7 +79,7 @@ def batch_save_scores(
             score_obj = Score(
                 student_id=entry.student_id,
                 event_id=entry.event_id,
-                raw_value=entry.raw_value,
+                raw_value=raw_value,
                 earned_score=earned,
                 test_date=entry.test_date,
                 recorder_id=current.id

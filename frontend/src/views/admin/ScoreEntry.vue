@@ -1,75 +1,87 @@
 <template>
-  <div class="score-entry">
-    <div v-if="!started">
-      <h3>成绩录入</h3>
-      <el-form label-width="80px" style="max-width:400px">
-        <el-form-item label="选择班级">
-          <el-select v-model="selectedClassId" placeholder="请选择班级" style="width:100%">
-            <el-option v-for="c in classes" :key="c.id" :label="c.label" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="选择项目">
-          <el-select v-model="selectedEventId" placeholder="请选择项目" style="width:100%">
-            <el-option v-for="e in events" :key="e.id" :label="e.name" :value="e.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="测试日期">
-          <el-date-picker v-model="testDate" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="startEntry" :disabled="!selectedClassId || !selectedEventId">
+  <div class="se-page">
+    <!-- Selection step -->
+    <div v-if="!started" class="se-select">
+      <div class="se-select-card">
+        <div class="se-icon-wrap">📋</div>
+        <h3>成绩录入</h3>
+        <p class="se-sub">选择班级和项目，开始逐人录入</p>
+        <el-form label-width="70px" class="se-form">
+          <el-form-item label="班级">
+            <el-select v-model="selectedClassId" placeholder="请选择" size="large" style="width:100%">
+              <el-option v-for="c in classes" :key="c.id" :label="c.label" :value="c.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="项目">
+            <el-select v-model="selectedEventId" placeholder="请选择" size="large" style="width:100%">
+              <el-option v-for="e in events" :key="e.id" :label="e.name" :value="e.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="日期">
+            <el-date-picker v-model="testDate" type="date" value-format="YYYY-MM-DD" size="large" style="width:100%" />
+          </el-form-item>
+          <el-button type="primary" size="large" @click="startEntry" :disabled="!selectedClassId || !selectedEventId" class="se-start-btn">
             开始录入
           </el-button>
-        </el-form-item>
-      </el-form>
+        </el-form>
+      </div>
     </div>
 
-    <div v-else>
-      <div class="entry-header">
-        <el-button text @click="started = false">← 返回</el-button>
-        <span>{{ selectedClassLabel }} - {{ selectedEventName }}</span>
+    <!-- Entry step -->
+    <div v-else class="se-entry">
+      <div class="se-topbar">
+        <el-button text @click="started = false" class="se-back">← 返回</el-button>
+        <span class="se-title">{{ selectedClassLabel }}</span>
+        <span class="se-event-tag">{{ selectedEventName }}</span>
       </div>
 
-      <div class="student-card" v-if="currentStudent">
-        <div class="student-nav">
+      <div class="se-card" v-if="currentStudent">
+        <div class="se-nav">
           <el-button circle @click="prevStudent" :disabled="currentIndex === 0">◀</el-button>
-          <div class="student-info">
-            <div class="student-name">{{ currentStudent.name }}</div>
-            <div class="student-id">{{ currentStudent.student_id }}</div>
-            <div class="progress">{{ currentIndex + 1 }} / {{ students.length }}</div>
+          <div class="se-student">
+            <div class="se-name">{{ currentStudent.name }}</div>
+            <div class="se-id">{{ currentStudent.student_id }}</div>
           </div>
           <el-button circle @click="nextStudent" :disabled="currentIndex >= students.length - 1">▶</el-button>
         </div>
+        <div class="se-progress">
+          <el-progress :percentage="Math.round((currentIndex + 1) / students.length * 100)" :stroke-width="4" :show-text="false" />
+          <span class="se-progress-text">{{ currentIndex + 1 }} / {{ students.length }}</span>
+        </div>
 
-        <div class="input-area">
+        <div class="se-input-area">
           <el-input
             v-model="currentValue"
             :placeholder="placeholder"
             size="large"
-            class="score-input"
+            class="se-input"
             @input="onValueChange"
+            clearable
           />
+          <div class="se-hint">支持: {{ formatHint }}</div>
         </div>
 
-        <div class="voice-area">
+        <div class="se-voice">
           <VoiceButton @result="onVoiceResult" />
         </div>
 
-        <div class="score-result" v-if="currentScore !== null">
-          <div class="earned">得分: {{ currentScore }} 分</div>
-          <div class="change" v-if="previousScore !== null">
-            上次: {{ previousScore }} 分
-            <span v-if="change > 0 && isPraise" class="praise">↑+{{ change }} ✨ 进步表扬</span>
-            <span v-else-if="change < 0 && isWarning" class="warning">↓{{ change }} 🟠 橙色预警</span>
-            <span v-else-if="change > 0">↑+{{ change }}</span>
-            <span v-else-if="change < 0">↓{{ change }}</span>
-            <span v-else>→ 持平</span>
+        <div class="se-result" v-if="currentScore !== null">
+          <div class="se-score">{{ currentScore }} <span>分</span></div>
+          <div class="se-change">
+            <template v-if="previousScore !== null">
+              <span class="se-prev">上次 {{ previousScore }}分</span>
+              <span v-if="isPraise" class="se-praise">↑ 进步表扬 ✨</span>
+              <span v-else-if="isWarning" class="se-warning">↓ 橙色预警 🟠</span>
+              <span v-else-if="change > 0" class="se-up">↑ +{{ change }}</span>
+              <span v-else-if="change < 0" class="se-down">↓ {{ change }}</span>
+              <span v-else class="se-same">→ 持平</span>
+            </template>
+            <span v-else class="se-first">首次测试</span>
           </div>
-          <div v-else class="change muted">- 首次测试</div>
         </div>
 
-        <el-button type="primary" size="large" @click="saveAndNext" :loading="saving" class="save-btn">
-          保存并下一个
+        <el-button type="primary" size="large" @click="saveAndNext" :loading="saving" class="se-save">
+          💾 保存并下一个
         </el-button>
       </div>
     </div>
@@ -113,117 +125,97 @@ const currentStudent = computed(() => students.value[currentIndex.value])
 const placeholder = computed(() => {
   if (!selectedEvent.value) return '输入成绩'
   const fmt = selectedEvent.value.input_format
-  if (fmt === 'time_ms') return "例如: 3'30"
-  if (fmt === 'decimal_seconds') return '例如: 8.1'
-  if (fmt === 'decimal_meters') return '例如: 1.95'
-  return '例如: 170'
+  if (fmt === 'time_ms') return "3分30 / 3'30"
+  if (fmt === 'decimal_seconds') return '8.1'
+  if (fmt === 'decimal_meters') return '1.95'
+  return '170'
+})
+
+const formatHint = computed(() => {
+  if (!selectedEvent.value) return ''
+  const fmt = selectedEvent.value.input_format
+  if (fmt === 'time_ms') return '3分30、3分30秒、3\'30、3\'30"'
+  if (fmt === 'decimal_seconds') return '秒.百分秒，如 8.1、22.51'
+  if (fmt === 'decimal_meters') return '十进制米，如 1.95'
+  return '整数，如 170'
 })
 
 onMounted(async () => {
-  const [cRes, eRes] = await Promise.all([
-    api.get('/events/classes'),
-    api.get('/events')
-  ])
-  classes.value = cRes.data
-  events.value = eRes.data
+  const [cRes, eRes] = await Promise.all([api.get('/events/classes'), api.get('/events')])
+  classes.value = cRes.data; events.value = eRes.data
 })
 
 async function startEntry() {
-  const res = await api.get(`/scores/student-list/${selectedClassId.value}`, {
-    params: { event_id: selectedEventId.value }
-  })
-  students.value = res.data
-  currentIndex.value = 0
-  currentValue.value = ''
-  currentScore.value = null
-  previousScore.value = null
-  change.value = null
-  isPraise.value = false
-  isWarning.value = false
-  started.value = true
+  const res = await api.get(`/scores/student-list/${selectedClassId.value}`, { params: { event_id: selectedEventId.value } })
+  students.value = res.data; currentIndex.value = 0; resetInput(); started.value = true
 }
 
 function prevStudent() { if (currentIndex.value > 0) { currentIndex.value--; resetInput() } }
 function nextStudent() { if (currentIndex.value < students.value.length - 1) { currentIndex.value++; resetInput() } }
 
 function resetInput() {
-  currentValue.value = ''
-  currentScore.value = null
-  previousScore.value = null
-  change.value = null
-  isPraise.value = false
-  isWarning.value = false
+  currentValue.value = ''; currentScore.value = null; previousScore.value = null
+  change.value = null; isPraise.value = false; isWarning.value = false
 }
 
-function onVoiceResult(text) {
-  currentValue.value = text
-  onValueChange()
-}
+function onVoiceResult(text) { currentValue.value = text; onValueChange() }
 
 async function onValueChange() {
   if (!currentValue.value) { currentScore.value = null; return }
   try {
-    const res = await api.post('/scores/batch', {
-      scores: [{
-        student_id: currentStudent.value.id,
-        event_id: selectedEventId.value,
-        raw_value: currentValue.value,
-        test_date: testDate.value
-      }]
-    })
-    const result = res.data[0]
-    currentScore.value = result.earned_score
-    previousScore.value = result.previous_score
-    change.value = result.change
-    isPraise.value = result.is_praise
-    isWarning.value = result.is_warning
-  } catch {
-    currentScore.value = null
-  }
+    const res = await api.post('/scores/batch', { scores: [{ student_id: currentStudent.value.id, event_id: selectedEventId.value, raw_value: currentValue.value, test_date: testDate.value }] })
+    const r = res.data[0]
+    currentScore.value = r.earned_score; previousScore.value = r.previous_score
+    change.value = r.change; isPraise.value = r.is_praise; isWarning.value = r.is_warning
+  } catch { currentScore.value = null }
 }
 
 async function saveAndNext() {
   if (!currentValue.value) { ElMessage.warning('请先输入成绩'); return }
   saving.value = true
   try {
-    await api.post('/scores/batch', {
-      scores: [{
-        student_id: currentStudent.value.id,
-        event_id: selectedEventId.value,
-        raw_value: currentValue.value,
-        test_date: testDate.value
-      }]
-    })
+    await api.post('/scores/batch', { scores: [{ student_id: currentStudent.value.id, event_id: selectedEventId.value, raw_value: currentValue.value, test_date: testDate.value }] })
     ElMessage.success('保存成功')
-    if (currentIndex.value < students.value.length - 1) {
-      nextStudent()
-    } else {
-      ElMessage.success('全部录入完成！')
-    }
-  } catch {
-    ElMessage.error('保存失败')
-  } finally {
-    saving.value = false
-  }
+    if (currentIndex.value < students.value.length - 1) { nextStudent() } else { ElMessage.success('全部录入完成！') }
+  } catch { ElMessage.error('保存失败') } finally { saving.value = false }
 }
 </script>
 
 <style scoped>
-.student-card { max-width: 400px; margin: 20px auto; text-align: center; }
-.student-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-.student-info { flex: 1; }
-.student-name { font-size: 22px; font-weight: bold; }
-.student-id { color: #999; font-size: 14px; }
-.progress { color: #ccc; font-size: 12px; margin-top: 4px; }
-.input-area { margin: 20px 0; }
-.score-input :deep(.el-input__inner) { text-align: center; font-size: 24px; }
-.voice-area { margin: 16px 0; }
-.score-result { margin: 20px 0; padding: 16px; background: #f5f7fa; border-radius: 8px; }
-.earned { font-size: 28px; font-weight: bold; color: #409EFF; }
-.change { font-size: 14px; margin-top: 8px; }
-.praise { color: #67c23a; font-weight: bold; }
-.warning { color: #e6a23c; font-weight: bold; }
-.muted { color: #ccc; }
-.save-btn { width: 100%; margin-top: 16px; }
-.entry-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; font-size: 16px; font-weight: bold; }
+.se-page { max-width: 480px; margin: 0 auto; }
+.se-select { padding: 20px 12px; }
+.se-select-card { background: white; border-radius: 16px; padding: 32px 20px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+.se-icon-wrap { font-size: 48px; margin-bottom: 8px; }
+.se-select-card h3 { margin: 0 0 4px; font-size: 20px; color: #303133; }
+.se-sub { color: #999; font-size: 13px; margin: 0 0 24px; }
+.se-form { text-align: left; }
+.se-start-btn { width: 100%; height: 44px; font-size: 16px; border-radius: 10px; }
+.se-topbar { display: flex; align-items: center; gap: 8px; padding: 8px 0 16px; }
+.se-back { font-size: 14px; }
+.se-title { font-weight: 600; font-size: 15px; }
+.se-event-tag { background: #ecf5ff; color: #409EFF; padding: 2px 10px; border-radius: 99px; font-size: 12px; }
+.se-card { background: white; border-radius: 16px; padding: 24px 20px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); text-align: center; }
+.se-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.se-student { flex: 1; }
+.se-name { font-size: 24px; font-weight: 700; color: #303133; }
+.se-id { font-size: 14px; color: #909399; margin-top: 2px; }
+.se-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+.se-progress-text { font-size: 11px; color: #c0c4cc; white-space: nowrap; }
+.se-input-area { margin: 20px 0 8px; }
+.se-input :deep(.el-input__inner) { text-align: center; font-size: 28px; height: 56px; border-radius: 12px; border: 2px solid #e4e7ed; }
+.se-input :deep(.el-input__inner:focus) { border-color: #409EFF; }
+.se-hint { font-size: 11px; color: #c0c4cc; margin-top: 6px; }
+.se-voice { margin: 12px 0; }
+.se-result { margin: 16px 0; padding: 20px; background: linear-gradient(135deg, #f0f5ff 0%, #fafbff 100%); border-radius: 14px; }
+.se-score { font-size: 40px; font-weight: 800; color: #409EFF; }
+.se-score span { font-size: 18px; font-weight: 400; color: #909399; }
+.se-change { margin-top: 8px; font-size: 13px; }
+.se-prev { color: #909399; margin-right: 8px; }
+.se-praise { color: #67c23a; font-weight: 600; }
+.se-warning { color: #e6a23c; font-weight: 600; }
+.se-up { color: #67c23a; }
+.se-down { color: #f56c6c; }
+.se-same { color: #909399; }
+.se-first { color: #c0c4cc; }
+.se-save { width: 100%; height: 48px; font-size: 16px; border-radius: 12px; }
 </style>
