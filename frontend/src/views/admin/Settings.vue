@@ -92,6 +92,10 @@
             <el-button type="primary" @click="saveConfig" style="width:100%">保存设置</el-button>
           </el-form-item>
         </el-form>
+
+        <el-divider />
+        <h4 style="color:#e6a23c;margin-bottom:8px">危险操作</h4>
+        <el-button type="danger" @click="clearScores" style="width:100%">清空所有成绩数据</el-button>
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -159,6 +163,12 @@ async function deleteAdmin(row) {
 async function saveConfig() {
   for (const [key, value] of Object.entries(config.value)) { await api.put(`/config/${key}`, { value: String(value) }) }
   ElMessage.success('已保存')
+}
+
+async function clearScores() {
+  await ElMessageBox.confirm('确定清空所有成绩数据吗？此操作不可恢复！', '危险操作', { type: 'error', confirmButtonText: '确定清空' })
+  await api.delete('/scores/clear-all')
+  ElMessage.success('已清空所有成绩')
 }
 </script>
 

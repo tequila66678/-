@@ -587,3 +587,11 @@ def get_class_students(
             q = q.filter(Student.gender == event.gender)
     students = q.order_by(Student.student_id).all()
     return [{"id": s.id, "student_id": s.student_id, "name": s.name, "gender": s.gender.value} for s in students]
+
+@router.delete("/clear-all")
+def clear_all_scores(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
+    """Delete all score records (to fix incorrect data)."""
+    count = db.query(Score).count()
+    db.query(Score).delete()
+    db.commit()
+    return {"ok": True, "deleted": count}

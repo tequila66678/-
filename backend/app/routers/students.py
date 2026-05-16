@@ -148,6 +148,20 @@ def batch_update(data: StudentBatchUpdate, db: Session = Depends(get_db), curren
     db.commit()
     return {"updated": count}
 
+@router.delete("/batch-delete")
+def batch_delete_students(
+    ids: list[int] = [],
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Batch delete students and their scores."""
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择要删除的学生")
+    db.query(Score).filter(Score.student_id.in_(ids)).delete(synchronize_session=False)
+    db.query(Student).filter(Student.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "deleted": len(ids)}
+
 @router.get("/template/download")
 def download_template():
     wb = openpyxl.Workbook()

@@ -12,13 +12,14 @@
         <el-button size="small" @click="downloadTemplate">模板</el-button>
         <el-button size="small" type="primary" @click="showImport = true">导入</el-button>
         <el-button size="small" @click="showBatchEdit = true">批量</el-button>
+        <el-button size="small" type="danger" @click="batchDelete" :disabled="!selectedIds.length">删除({{ selectedIds.length }})</el-button>
       </div>
     </div>
 
     <!-- Desktop table -->
     <div class="desktop-only">
-      <el-table :data="students" border stripe size="small">
-        <el-table-column prop="student_id" label="学号" width="110" />
+      <el-table :data="students" border stripe size="small" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="40" />
         <el-table-column prop="name" label="姓名" width="80" />
         <el-table-column label="性别" width="50">
           <template #default="{ row }">{{ row.gender === 'M' ? '男' : '女' }}</template>
@@ -38,6 +39,7 @@
     <!-- Mobile card list -->
     <div class="mobile-only">
       <div v-for="s in students" :key="s.id" class="student-card">
+        <el-checkbox :model-value="selectedIds.includes(s.id)" @change="toggleSelect(s.id)" style="margin-right:8px" />
         <div class="sc-info">
           <div class="sc-name">{{ s.name }} <span class="sc-gender">{{ s.gender === 'M' ? '男' : '女' }}</span></div>
           <div class="sc-id">{{ s.student_id }}</div>
@@ -162,6 +164,22 @@ function editStudent(row) {
 async function saveEdit() {
   await api.put(`/students/${editForm.value.id}`, { student_id: editForm.value.student_id, name: editForm.value.name, gender: editForm.value.gender, class_id: editForm.value.class_id })
   ElMessage.success('修改成功'); showEdit.value = false; loadStudents()
+}
+
+const selectedIds = ref([])
+
+function onSelectionChange(rows) { selectedIds.value = rows.map(r => r.id) }
+function toggleSelect(id) {
+  const idx = selectedIds.value.indexOf(id)
+  if (idx >= 0) selectedIds.value.splice(idx, 1)
+  else selectedIds.value.push(id)
+}
+
+async function batchDelete() {
+  if (!selectedIds.value.length) return
+  await ElMessageBox.confirm(`确定删除选中的 ${selectedIds.value.length} 名学生？`, '批量删除', { type: 'error' })
+  await api.delete('/students/batch-delete', { data: selectedIds.value })
+  ElMessage.success('删除成功'); selectedIds.value = []; loadStudents()
 }
 
 async function deleteStudent(row) {
