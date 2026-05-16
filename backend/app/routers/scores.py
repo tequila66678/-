@@ -588,6 +588,31 @@ def get_class_students(
     students = q.order_by(Student.student_id).all()
     return [{"id": s.id, "student_id": s.student_id, "name": s.name, "gender": s.gender.value} for s in students]
 
+@router.get("/backup-all")
+def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
+    """Backup all students and scores as Excel."""
+    wb = openpyxl.Workbook()
+
+    # Sheet 1: Students
+    ws1 = wb.active
+    ws1.title = "学生信息"
+    ws1.append(["ID", "学号", "姓名", "性别", "班级"])
+    for s in db.query(Student).order_by(Student.student_id).all():
+        cls = db.query(Class).get(s.class_id)
+        ws1.append([s.id, s.student_id, s.name, s.gender.value, f"{cls.grade}{cls.name}" if cls else ""])
+
+    # Sheet 2: Scores
+    ws2 = wb.create_sheet("成绩记录")
+    ws2.append(["学生学号", "学生姓名", "项目", "成绩", "得分", "测试日期"])
+    for sc in db.query(Score).order_by(Score.test_date.desc()).all():
+        student = db.query(Student).get(sc.student_id)
+        event = db.query(SportEvent).get(sc.event_id)
+        ws2.append([student.student_id if student else "", student.name if student else "", event.name if event else "", sc.raw_value, sc.earned_score, sc.test_date.isoformat()])
+
+    buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
+    return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=sports_backup.xlsx"})
+
 @router.delete("/clear-all")
 def clear_all_scores(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
     """Delete all score records (to fix incorrect data)."""

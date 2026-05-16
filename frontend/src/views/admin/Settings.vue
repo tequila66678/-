@@ -94,6 +94,9 @@
         </el-form>
 
         <el-divider />
+        <h4 style="margin-bottom:8px">数据维护</h4>
+        <el-button @click="backupData" style="width:100%;margin-bottom:8px">备份全部数据 (Excel)</el-button>
+        <el-divider />
         <h4 style="color:#e6a23c;margin-bottom:8px">危险操作</h4>
         <el-button type="danger" @click="clearScores" style="width:100%">清空所有成绩数据</el-button>
       </el-tab-pane>
@@ -164,6 +167,8 @@ async function saveConfig() {
   for (const [key, value] of Object.entries(config.value)) { await api.put(`/config/${key}`, { value: String(value) }) }
   ElMessage.success('已保存')
 }
+
+function backupData() { window.open('/api/scores/backup-all') }
 
 async function clearScores() {
   await ElMessageBox.confirm('确定清空所有成绩数据吗？此操作不可恢复！', '危险操作', { type: 'error', confirmButtonText: '确定清空' })
