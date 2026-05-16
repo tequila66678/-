@@ -33,8 +33,14 @@ if (recognition) {
     processing.value = false
   }
 
-  recognition.onerror = () => {
-    ElMessage.warning('语音识别失败，请重试')
+  recognition.onerror = (event) => {
+    const errors = {
+      'not-allowed': '麦克风权限被拒绝，请在浏览器设置中允许麦克风',
+      'network': '网络无法连接语音服务，请手动输入成绩',
+      'no-speech': '未检测到语音，请靠近麦克风再试',
+      'aborted': '录音已取消'
+    }
+    ElMessage.warning(errors[event.error] || '语音识别失败，请手动输入')
     recording.value = false
     processing.value = false
   }
