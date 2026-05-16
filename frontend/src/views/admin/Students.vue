@@ -59,8 +59,12 @@
       style="margin-top:12px;justify-content:center"
     />
 
-    <el-dialog v-model="showImport" title="批量导入" width="90%" :fullscreen="isMobile">
-      <el-upload :http-request="handleImport" accept=".xlsx" :show-file-list="false" drag>
+    <el-dialog v-model="showImport" title="批量导入" width="90%" :fullscreen="isMobile" @close="importResult=null; importing=false">
+      <div v-if="importing" style="text-align:center;padding:20px">
+        <el-progress :percentage="importProgress" :stroke-width="20" :text-inside="true" />
+        <p style="color:#909399;margin-top:8px">正在导入...</p>
+      </div>
+      <el-upload v-else :http-request="handleImport" accept=".xlsx" :show-file-list="false" drag>
         <div>拖拽Excel文件或点击上传</div>
       </el-upload>
       <div v-if="importResult" style="margin-top:12px">
@@ -121,8 +125,8 @@ const page = ref(1)
 const total = ref(0)
 
 const showImport = ref(false)
-const showBatchEdit = ref(false)
-const showEdit = ref(false)
+const importing = ref(false)
+const importProgress = ref(0)
 const importResult = ref(null)
 const batchFromClass = ref(null)
 const batchToClass = ref(null)
@@ -146,9 +150,14 @@ async function loadStudents() {
 function downloadTemplate() { window.open('/api/students/template/download') }
 
 async function handleImport({ file }) {
-  const form = new FormData(); form.append('file', file)
-  const res = await api.post('/students/batch-import', form)
-  importResult.value = res.data; loadStudents()
+  importing.value = true; importProgress.value = 0
+  const timer = setInterval(() => { if (importProgress.value < 90) importProgress.value += 10 }, 300)
+  try {
+    const form = new FormData(); form.append('file', file)
+    const res = await api.post('/students/batch-import', form)
+    importProgress.value = 100
+    importResult.value = res.data; loadStudents()
+  } finally { clearInterval(timer); importing.value = false }
 }
 
 async function doBatchUpdate() {

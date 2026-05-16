@@ -62,9 +62,9 @@
           <div class="se-hint">支持: {{ formatHint }}</div>
         </div>
 
-        <div class="se-voice">
-          <VoiceButton @result="onVoiceResult" />
-        </div>
+        <el-button type="primary" size="large" @click="saveAndNext" :loading="saving" class="se-save">
+          💾 保存并下一个
+        </el-button>
 
         <div class="se-result" v-if="currentScore !== null">
           <div class="se-score">{{ currentScore }} <span>分</span></div>
@@ -80,10 +80,6 @@
             <span v-else class="se-first">首次测试</span>
           </div>
         </div>
-
-        <el-button type="primary" size="large" @click="saveAndNext" :loading="saving" class="se-save">
-          💾 保存并下一个
-        </el-button>
       </div>
     </div>
   </div>
@@ -93,7 +89,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../../api'
-import VoiceButton from '../../components/VoiceButton.vue'
 
 const classes = ref([])
 const events = ref([])
@@ -159,8 +154,6 @@ function resetInput() {
   change.value = null; isPraise.value = false; isWarning.value = false
 }
 
-function onVoiceResult(text) { currentValue.value = text; onValueChange() }
-
 async function onValueChange() {
   if (!currentValue.value) { currentScore.value = null; return }
   try {
@@ -207,7 +200,6 @@ async function saveAndNext() {
 .se-input :deep(.el-input__inner) { text-align: center; font-size: 28px; height: 56px; border-radius: 12px; border: 2px solid #e4e7ed; }
 .se-input :deep(.el-input__inner:focus) { border-color: #409EFF; }
 .se-hint { font-size: 11px; color: #c0c4cc; margin-top: 6px; }
-.se-voice { margin: 12px 0; }
 .se-result { margin: 16px 0; padding: 20px; background: linear-gradient(135deg, #f0f5ff 0%, #fafbff 100%); border-radius: 14px; }
 .se-score { font-size: 40px; font-weight: 800; color: #409EFF; }
 .se-score span { font-size: 18px; font-weight: 400; color: #909399; }

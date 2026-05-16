@@ -54,6 +54,11 @@
       </div>
     </div>
 
+    <div v-if="previewing || downloading" style="text-align:center;padding:20px">
+      <el-progress :percentage="exportProgress" :stroke-width="16" :text-inside="true" :status="exportProgress === 100 ? 'success' : ''" />
+      <p style="color:#909399;margin-top:8px">{{ downloading ? '正在生成文件...' : '正在查询数据...' }}</p>
+    </div>
+
     <template #footer>
       <el-button @click="doPreview" :loading="previewing">预览</el-button>
       <el-button type="primary" @click="doDownload" :loading="downloading">确认导出</el-button>
@@ -84,6 +89,7 @@ const preview = ref([])
 const total = ref(0)
 const previewing = ref(false)
 const downloading = ref(false)
+const exportProgress = ref(0)
 
 watch(() => props.modelValue, v => { visible.value = v })
 
@@ -105,7 +111,8 @@ async function searchStudent() {
 async function doPreview() {
   if (scope.value === 'class' && !classId.value) { ElMessage.warning('请选择班级'); return }
   if (scope.value === 'student' && !studentId.value) { ElMessage.warning('请搜索学生'); return }
-  previewing.value = true
+  previewing.value = true; exportProgress.value = 10
+  const timer = setInterval(() => { if (exportProgress.value < 85) exportProgress.value += 15 }, 200)
   try {
     const params = { scope: scope.value, mode: mode.value }
     if (classId.value) params.class_id = classId.value
@@ -115,13 +122,16 @@ async function doPreview() {
     const res = await api.post('/scores/export/preview', null, { params })
     preview.value = res.data.rows.slice(0, 20)
     total.value = res.data.total
+    exportProgress.value = 100
     ElMessage.success(`查询到 ${total.value} 条记录`)
-  } catch { ElMessage.error('预览失败') } finally { previewing.value = false }
+  } catch { ElMessage.error('预览失败') } finally { clearInterval(timer); previewing.value = false }
 }
 
 function doDownload() {
   if (scope.value === 'class' && !classId.value) { ElMessage.warning('请选择班级'); return }
   if (scope.value === 'student' && !studentId.value) { ElMessage.warning('请搜索学生'); return }
+  downloading.value = true; exportProgress.value = 50
+  const timer = setInterval(() => { if (exportProgress.value < 95) exportProgress.value += 10 }, 150)
   const params = { scope: scope.value, mode: mode.value, format: format.value }
   if (classId.value) params.class_id = classId.value
   if (studentId.value) params.student_id = studentId.value
@@ -129,6 +139,7 @@ function doDownload() {
   if (dateRange.value) { params.date_from = dateRange.value[0]; params.date_to = dateRange.value[1] }
   const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
   window.open(`/api/scores/export/download?${qs}`)
+  setTimeout(() => { exportProgress.value = 100; clearInterval(timer); downloading.value = false }, 1000)
 }
 </script>
 
