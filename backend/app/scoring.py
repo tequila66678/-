@@ -72,4 +72,4 @@ def calculate_score(raw_value: str, event: SportEvent, standards: list[ScoringSt
             if parsed <= std_val:
                 return score
 
-    return 1
+    return 0
