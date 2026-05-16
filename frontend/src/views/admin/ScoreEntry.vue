@@ -2,6 +2,7 @@
   <div class="se-page">
     <!-- Selection step -->
     <div v-if="!started" class="se-select">
+      <el-button text @click="$router.push('/admin/dashboard')" class="se-back-top">← 返回仪表盘</el-button>
       <div class="se-select-card">
         <div class="se-icon-wrap">📋</div>
         <h3>成绩录入</h3>
@@ -183,6 +184,7 @@ async function saveAndNext() {
 
 <style scoped>
 .se-page { max-width: 480px; margin: 0 auto; }
+.se-back-top { margin-bottom: 8px; }
 .se-select { padding: 20px 12px; }
 .se-select-card { background: white; border-radius: 16px; padding: 32px 20px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
 .se-icon-wrap { font-size: 48px; margin-bottom: 8px; }

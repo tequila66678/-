@@ -339,6 +339,241 @@ def export_student_scores(
     )
 
 @router.get("/student-list/{class_id}")
+@router.get("/school-stats")
+def school_stats(
+    event_ids: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """School-wide statistics."""
+    event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
+    events = db.query(SportEvent).order_by(SportEvent.sort_order).all()
+    if event_id_list:
+        events = [e for e in events if e.id in event_id_list]
+
+    all_students = db.query(Student).all()
+    all_scores = db.query(Score).order_by(Score.test_date.desc()).all()
+
+    # Latest per student per event
+    latest = {}
+    for sc in all_scores:
+        key = (sc.student_id, sc.event_id)
+        if key not in latest:
+            latest[key] = sc
+
+    event_scores = defaultdict(list)
+    student_totals = defaultdict(list)
+    for (sid, eid), sc in latest.items():
+        if eid in [e.id for e in events]:
+            event_scores[eid].append(sc.earned_score)
+            student_totals[sid].append(sc.earned_score)
+
+    event_avgs = []
+    for e in events:
+        scores_list = event_scores.get(e.id, [])
+        avg = sum(scores_list) / len(scores_list) if scores_list else 0
+        event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
+
+    total_scores = [sum(v) for v in student_totals.values() if v]
+    n_students = len(student_totals)
+    max_per_student = len(events)
+    overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
+    excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
+    pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
+
+    classes = db.query(Class).order_by(Class.grade, Class.name).all()
+    class_summaries = []
+    for cls in classes:
+        cls_students = [s for s in all_students if s.class_id == cls.id]
+        cls_total = 0
+        cls_count = 0
+        for s in cls_students:
+            if s.id in student_totals:
+                cls_total += sum(student_totals[s.id])
+                cls_count += 1
+        cls_avg = cls_total / (cls_count * max_per_student) * 10 if cls_count > 0 and max_per_student > 0 else 0
+        class_summaries.append({
+            "class_id": cls.id, "class_name": f"{cls.grade}{cls.name}",
+            "students": len(cls_students), "avg_score": round(cls_avg, 1)
+        })
+
+    warning_students = []
+    for s in all_students:
+        for e in events:
+            student_scores = sorted(
+                [sc for sc in all_scores if sc.student_id == s.id and sc.event_id == e.id],
+                key=lambda x: x.test_date
+            )
+            if len(student_scores) >= 2:
+                prev = student_scores[-2].earned_score
+                curr = student_scores[-1].earned_score
+                if prev - curr >= 2:
+                    warning_students.append({
+                        "student_no": s.student_id, "student_name": s.name,
+                        "event_name": e.name, "prev_score": prev, "curr_score": curr
+                    })
+
+    return {
+        "total_students": n_students,
+        "total_classes": len(class_summaries),
+        "avg_score": round(overall_avg, 1),
+        "excellent_rate": round(excellent_count / n_students * 100, 1) if n_students else 0,
+        "pass_rate": round(pass_count / n_students * 100, 1) if n_students else 0,
+        "event_avgs": event_avgs,
+        "class_summaries": class_summaries,
+        "warning_students": warning_students
+    }
+
+@router.post("/export/preview")
+def export_preview(
+    scope: str = Query(...),        # "school" | "class" | "student"
+    class_id: Optional[int] = Query(None),
+    student_id: Optional[int] = Query(None),
+    event_ids: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    mode: str = Query("all"),       # "all" | "best" | "latest"
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Preview export data before downloading."""
+    event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
+
+    # Build query
+    q = db.query(Score)
+    if scope == "class" and class_id:
+        students_in_class = db.query(Student).filter(Student.class_id == class_id).all()
+        q = q.filter(Score.student_id.in_([s.id for s in students_in_class]))
+    elif scope == "student" and student_id:
+        q = q.filter(Score.student_id == student_id)
+    if event_id_list:
+        q = q.filter(Score.event_id.in_(event_id_list))
+    if date_from:
+        q = q.filter(Score.test_date >= date(date_from))
+    if date_to:
+        q = q.filter(Score.test_date <= date(date_to))
+
+    all_scores = q.order_by(Score.test_date.desc(), Score.student_id).all()
+    events = db.query(SportEvent).all()
+    event_map = {e.id: e for e in events}
+
+    if mode == "best":
+        best = {}
+        for sc in all_scores:
+            key = (sc.student_id, sc.event_id)
+            if key not in best or sc.earned_score > best[key].earned_score:
+                best[key] = sc
+        all_scores = sorted(best.values(), key=lambda x: (x.student_id, x.event_id))
+    elif mode == "latest":
+        latest = {}
+        for sc in all_scores:
+            key = (sc.student_id, sc.event_id)
+            if key not in latest:
+                latest[key] = sc
+        all_scores = sorted(latest.values(), key=lambda x: (x.student_id, x.event_id))
+
+    # Build preview rows
+    rows = []
+    for sc in all_scores:
+        student = db.query(Student).get(sc.student_id)
+        rows.append({
+            "student_id": student.student_id if student else "",
+            "student_name": student.name if student else "",
+            "gender": student.gender.value if student else "",
+            "class": f"{student.class_.grade}{student.class_.name}" if (student and student.class_) else "",
+            "event_name": event_map[sc.event_id].name if sc.event_id in event_map else "",
+            "raw_value": sc.raw_value,
+            "earned_score": sc.earned_score,
+            "test_date": sc.test_date.isoformat()
+        })
+
+    return {"rows": rows, "total": len(rows)}
+
+@router.post("/export/download")
+def export_download(
+    scope: str = Query(...),
+    class_id: Optional[int] = Query(None),
+    student_id: Optional[int] = Query(None),
+    event_ids: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    mode: str = Query("all"),
+    format: str = Query("xlsx"),
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Download export file (xlsx or txt)."""
+    # Reuse preview logic
+    event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
+    q = db.query(Score)
+    if scope == "class" and class_id:
+        students_in_class = db.query(Student).filter(Student.class_id == class_id).all()
+        q = q.filter(Score.student_id.in_([s.id for s in students_in_class]))
+    elif scope == "student" and student_id:
+        q = q.filter(Score.student_id == student_id)
+    if event_id_list:
+        q = q.filter(Score.event_id.in_(event_id_list))
+    if date_from:
+        q = q.filter(Score.test_date >= date(date_from))
+    if date_to:
+        q = q.filter(Score.test_date <= date(date_to))
+
+    all_scores = q.order_by(Score.test_date.desc(), Score.student_id).all()
+    events = db.query(SportEvent).all()
+    event_map = {e.id: e for e in events}
+
+    if mode == "best":
+        best = {}
+        for sc in all_scores:
+            key = (sc.student_id, sc.event_id)
+            if key not in best or sc.earned_score > best[key].earned_score:
+                best[key] = sc
+        all_scores = sorted(best.values(), key=lambda x: (x.student_id, x.event_id))
+    elif mode == "latest":
+        latest = {}
+        for sc in all_scores:
+            key = (sc.student_id, sc.event_id)
+            if key not in latest:
+                latest[key] = sc
+        all_scores = sorted(latest.values(), key=lambda x: (x.student_id, x.event_id))
+
+    scope_label = {"school": "全校", "class": "班级", "student": "个人"}.get(scope, "")
+    mode_label = {"all": "全部", "best": "最优", "latest": "最近"}.get(mode, "")
+
+    if format == "txt":
+        lines = []
+        for sc in all_scores:
+            student = db.query(Student).get(sc.student_id)
+            name = student.name if student else ""
+            evt = event_map[sc.event_id].name if sc.event_id in event_map else ""
+            lines.append(f"{name}\t{evt}\t{sc.raw_value}\t{sc.earned_score}分\t{sc.test_date}")
+        content = "\n".join(lines)
+        return StreamingResponse(
+            iter([content]), media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename=export_{scope_label}_{mode_label}.txt"}
+        )
+
+    # xlsx
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"{scope_label}成绩{mode_label}"
+    ws.append(["学号", "姓名", "性别", "班级", "项目", "成绩", "得分", "测试日期"])
+    for sc in all_scores:
+        student = db.query(Student).get(sc.student_id)
+        ws.append([
+            student.student_id if student else "", student.name if student else "",
+            student.gender.value if student else "", f"{student.class_.grade}{student.class_.name}" if (student and student.class_) else "",
+            event_map[sc.event_id].name if sc.event_id in event_map else "",
+            sc.raw_value, sc.earned_score, sc.test_date.isoformat()
+        ])
+    buffer = BytesIO()
+    wb.save(buffer); buffer.seek(0)
+    return StreamingResponse(
+        buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=export_{scope_label}_{mode_label}.xlsx"}
+    )
+
+
 def get_class_students(
     class_id: int,
     event_id: int = Query(None),

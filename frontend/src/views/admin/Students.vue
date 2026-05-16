@@ -1,6 +1,7 @@
 <template>
   <div class="students-page">
-    <h3 style="margin-bottom:12px">学生管理</h3>
+    <el-button text @click="$router.push('/admin/dashboard')" class="back-btn">← 返回仪表盘</el-button>
+    <h3 style="margin:8px 0 12px">学生管理</h3>
 
     <div class="toolbar">
       <el-input v-model="search" placeholder="搜索学号/姓名" clearable @change="loadStudents" class="tb-search" size="default" />
@@ -170,6 +171,7 @@ async function deleteStudent(row) {
 </script>
 
 <style scoped>
+.back-btn { margin-bottom: 4px; font-size: 13px; }
 .toolbar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .tb-search { flex: 1; min-width: 120px; }
 .tb-class { width: 110px; flex-shrink: 0; }

@@ -1,6 +1,7 @@
 <template>
   <div class="settings-page">
-    <h3 style="margin-bottom:12px">开发人员选项</h3>
+    <el-button text @click="$router.push('/admin/dashboard')" class="back-btn">← 返回仪表盘</el-button>
+    <h3 style="margin:8px 0 12px">开发人员选项</h3>
     <el-tabs v-model="activeTab">
       <el-tab-pane label="项目设置" name="events">
         <el-button size="small" @click="showAddEvent = true" style="margin-bottom:8px">新增项目</el-button>
@@ -162,6 +163,7 @@ async function saveConfig() {
 </script>
 
 <style scoped>
+.back-btn { margin-bottom: 4px; font-size: 13px; }
 .event-card, .admin-card { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border-radius: 8px; margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 .ec-name, .ad-name { font-size: 14px; font-weight: bold; }
 .ec-meta, .ad-role { font-size: 11px; color: #999; }
