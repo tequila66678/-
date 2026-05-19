@@ -7,4 +7,4 @@ python-multipart==0.0.12
 openpyxl==3.1.5
 pydantic==2.9.2
 pydantic-settings==2.5.2
-psycopg2-binary==2.9.9
+pg8000==1.31.5
