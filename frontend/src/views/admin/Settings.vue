@@ -168,7 +168,19 @@ async function saveConfig() {
   ElMessage.success('已保存')
 }
 
-function backupData() { window.open('/api/scores/backup-all') }
+async function backupData() {
+  const token = localStorage.getItem('admin_token')
+  const res = await fetch('/api/scores/backup-all', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  if (!res.ok) { ElMessage.error('备份失败'); return }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = 'sports_backup.xlsx'; a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('备份完成')
+}
 
 async function clearScores() {
   await ElMessageBox.confirm('确定清空所有成绩数据吗？此操作不可恢复！', '危险操作', { type: 'error', confirmButtonText: '确定清空' })
