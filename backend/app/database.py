@@ -8,7 +8,7 @@ if url.startswith("postgresql://"):
 elif url.startswith("postgres://"):
     url = url.replace("postgres://", "postgresql+pg8000://", 1)
 
-engine = create_engine(url)
+engine = create_engine(url, connect_args={"ssl_context": True})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):
