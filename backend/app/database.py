@@ -2,11 +2,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from .config import settings
 
-connect_args = {}
-if "postgresql" in settings.database_url:
-    connect_args["sslmode"] = "require"
+url = settings.database_url
+if url.startswith("postgresql://"):
+    url = url.replace("postgresql://", "postgresql+pg8000://", 1)
+elif url.startswith("postgres://"):
+    url = url.replace("postgres://", "postgresql+pg8000://", 1)
 
-engine = create_engine(settings.database_url, connect_args=connect_args)
+engine = create_engine(url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):
