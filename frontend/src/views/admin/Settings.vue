@@ -169,17 +169,16 @@ async function saveConfig() {
 }
 
 async function backupData() {
-  const token = localStorage.getItem('admin_token')
-  const res = await fetch('/api/scores/backup-all', {
-    headers: { 'Authorization': `Bearer ${token}` }
-  })
-  if (!res.ok) { ElMessage.error('备份失败'); return }
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = 'sports_backup.xlsx'; a.click()
-  URL.revokeObjectURL(url)
-  ElMessage.success('备份完成')
+  try {
+    const res = await api.get('/scores/backup-all', { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'sports_backup.xlsx'; a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('备份完成')
+  } catch {
+    ElMessage.error('备份失败，请重试')
+  }
 }
 
 async function clearScores() {
