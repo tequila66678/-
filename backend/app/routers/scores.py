@@ -488,7 +488,7 @@ def export_preview(
 
     return {"rows": rows, "total": len(rows)}
 
-@router.post("/export/download")
+@router.get("/export/download")
 def export_download(
     scope: str = Query(...),
     class_id: Optional[int] = Query(None),
@@ -499,7 +499,7 @@ def export_download(
     mode: str = Query("all"),
     format: str = Query("xlsx"),
     db: Session = Depends(get_db),
-    current: Admin = Depends(get_current_admin)
+    current: Admin = Depends(get_current_admin_flexible)
 ):
     """Download export file (xlsx or txt)."""
     # Reuse preview logic

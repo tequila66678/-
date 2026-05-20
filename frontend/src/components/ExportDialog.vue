@@ -137,6 +137,8 @@ function doDownload() {
   if (studentId.value) params.student_id = studentId.value
   if (eventIds.value.length) params.event_ids = eventIds.value.join(',')
   if (dateRange.value) { params.date_from = dateRange.value[0]; params.date_to = dateRange.value[1] }
+  const token = localStorage.getItem('admin_token')
+  if (token) params.token = token
   const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
   window.open(`/api/scores/export/download?${qs}`)
   setTimeout(() => { exportProgress.value = 100; clearInterval(timer); downloading.value = false }, 1000)
