@@ -514,6 +514,12 @@ def export_download(
     current: Admin = Depends(get_current_admin_flexible)
 ):
     """Download export file (xlsx or txt)."""
+    try:
+        return _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
+
+def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, db):
     # Reuse preview logic
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
     q = db.query(Score)
