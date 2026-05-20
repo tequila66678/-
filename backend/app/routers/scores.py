@@ -448,9 +448,9 @@ def export_preview(
     if event_id_list:
         q = q.filter(Score.event_id.in_(event_id_list))
     if date_from:
-        q = q.filter(Score.test_date >= date(date_from))
+        q = q.filter(Score.test_date >= date.fromisoformat(date_from))
     if date_to:
-        q = q.filter(Score.test_date <= date(date_to))
+        q = q.filter(Score.test_date <= date.fromisoformat(date_to))
 
     all_scores = q.order_by(Score.test_date.desc(), Score.student_id).all()
     events = db.query(SportEvent).all()
@@ -471,15 +471,27 @@ def export_preview(
                 latest[key] = sc
         all_scores = sorted(latest.values(), key=lambda x: (x.student_id, x.event_id))
 
+    # Preload students and classes
+    student_ids = {sc.student_id for sc in all_scores} if all_scores else set()
+    if student_ids:
+        students_list = db.query(Student).filter(Student.id.in_(student_ids)).all()
+        class_ids = {s.class_id for s in students_list}
+        classes_map = {c.id: c for c in db.query(Class).filter(Class.id.in_(class_ids)).all()} if class_ids else {}
+        students_map = {s.id: s for s in students_list}
+    else:
+        students_map = {}
+        classes_map = {}
+
     # Build preview rows
     rows = []
     for sc in all_scores:
-        student = db.query(Student).get(sc.student_id)
+        student = students_map.get(sc.student_id)
+        cls = classes_map.get(student.class_id) if student else None
         rows.append({
             "student_id": student.student_id if student else "",
             "student_name": student.name if student else "",
             "gender": student.gender.value if student else "",
-            "class": f"{student.class_.grade}{student.class_.name}" if (student and student.class_) else "",
+            "class": f"{cls.grade}{cls.name}" if cls else "",
             "event_name": event_map[sc.event_id].name if sc.event_id in event_map else "",
             "raw_value": sc.raw_value,
             "earned_score": sc.earned_score,
@@ -513,9 +525,9 @@ def export_download(
     if event_id_list:
         q = q.filter(Score.event_id.in_(event_id_list))
     if date_from:
-        q = q.filter(Score.test_date >= date(date_from))
+        q = q.filter(Score.test_date >= date.fromisoformat(date_from))
     if date_to:
-        q = q.filter(Score.test_date <= date(date_to))
+        q = q.filter(Score.test_date <= date.fromisoformat(date_to))
 
     all_scores = q.order_by(Score.test_date.desc(), Score.student_id).all()
     events = db.query(SportEvent).all()
@@ -536,13 +548,25 @@ def export_download(
                 latest[key] = sc
         all_scores = sorted(latest.values(), key=lambda x: (x.student_id, x.event_id))
 
+    # Preload students and classes
+    student_ids = {sc.student_id for sc in all_scores} if all_scores else set()
+    if student_ids:
+        students_list = db.query(Student).filter(Student.id.in_(student_ids)).all()
+        class_ids = {s.class_id for s in students_list}
+        classes_map = {c.id: c for c in db.query(Class).filter(Class.id.in_(class_ids)).all()} if class_ids else {}
+        students_map = {s.id: s for s in students_list}
+    else:
+        students_map = {}
+        classes_map = {}
+
     scope_label = {"school": "全校", "class": "班级", "student": "个人"}.get(scope, "")
     mode_label = {"all": "全部", "best": "最优", "latest": "最近"}.get(mode, "")
 
     if format == "txt":
         lines = []
         for sc in all_scores:
-            student = db.query(Student).get(sc.student_id)
+            student = students_map.get(sc.student_id)
+            cls = classes_map.get(student.class_id) if student else None
             name = student.name if student else ""
             evt = event_map[sc.event_id].name if sc.event_id in event_map else ""
             lines.append(f"{name}\t{evt}\t{sc.raw_value}\t{sc.earned_score}分\t{sc.test_date}")
@@ -558,10 +582,11 @@ def export_download(
     ws.title = f"{scope_label}成绩{mode_label}"
     ws.append(["学号", "姓名", "性别", "班级", "项目", "成绩", "得分", "测试日期"])
     for sc in all_scores:
-        student = db.query(Student).get(sc.student_id)
+        student = students_map.get(sc.student_id)
+        cls = classes_map.get(student.class_id) if student else None
         ws.append([
             student.student_id if student else "", student.name if student else "",
-            student.gender.value if student else "", f"{student.class_.grade}{student.class_.name}" if (student and student.class_) else "",
+            student.gender.value if student else "", f"{cls.grade}{cls.name}" if cls else "",
             event_map[sc.event_id].name if sc.event_id in event_map else "",
             sc.raw_value, sc.earned_score, sc.test_date.isoformat()
         ])
