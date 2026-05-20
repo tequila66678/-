@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from ..database import get_db
-from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat
+from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat, Gender
 from ..schemas import ScoreBatchSave, ScoreWithChange
 from ..auth import get_current_admin, get_current_admin_flexible
 from ..scoring import calculate_score, normalize_time_ms
@@ -621,40 +622,157 @@ def get_class_students(
 
 @router.get("/backup-all")
 def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin_flexible)):
-    """Backup all students and scores as Excel."""
+    """Backup all data as Excel (7 sheets)."""
     wb = openpyxl.Workbook()
 
-    # Sheet 1: Students
+    # Sheet 1: Classes
     ws1 = wb.active
-    ws1.title = "学生信息"
-    ws1.append(["ID", "学号", "姓名", "性别", "班级"])
-    students = db.query(Student).order_by(Student.student_id).all()
-    if students:
-        class_ids = {s.class_id for s in students}
-        classes_map = {c.id: c for c in db.query(Class).filter(Class.id.in_(class_ids)).all()}
-    else:
-        classes_map = {}
-    for s in students:
-        cls = classes_map.get(s.class_id)
-        ws1.append([s.id, s.student_id, s.name, s.gender.value, f"{cls.grade}{cls.name}" if cls else ""])
+    ws1.title = "班级信息"
+    ws1.append(["ID", "年级", "班级名"])
+    classes = db.query(Class).order_by(Class.grade, Class.name).all()
+    for c in classes:
+        ws1.append([c.id, c.grade, c.name])
 
-    # Sheet 2: Scores
-    ws2 = wb.create_sheet("成绩记录")
-    ws2.append(["学生学号", "学生姓名", "项目", "成绩", "得分", "测试日期"])
+    # Sheet 2: Sport Events
+    ws2 = wb.create_sheet("体育项目")
+    ws2.append(["ID", "名称", "性别", "越大越好", "单位", "输入格式", "排序"])
+    events = db.query(SportEvent).order_by(SportEvent.sort_order).all()
+    for e in events:
+        ws2.append([e.id, e.name, e.gender.value if e.gender else "both", e.higher_better, e.unit, e.input_format.value if e.input_format else "decimal_seconds", e.sort_order])
+
+    # Sheet 3: Scoring Standards
+    ws3 = wb.create_sheet("评分标准")
+    ws3.append(["ID", "项目ID", "性别", "分数", "标准值"])
+    standards = db.query(ScoringStandard).order_by(ScoringStandard.event_id, ScoringStandard.score.desc()).all()
+    for std in standards:
+        ws3.append([std.id, std.event_id, std.gender.value if std.gender else "both", std.score, std.standard_value])
+
+    # Sheet 4: Students
+    ws4 = wb.create_sheet("学生信息")
+    ws4.append(["ID", "学号", "姓名", "性别", "班级ID", "密码哈希"])
+    students = db.query(Student).order_by(Student.student_id).all()
+    for s in students:
+        ws4.append([s.id, s.student_id, s.name, s.gender.value if s.gender else "M", s.class_id, s.password_hash])
+
+    # Sheet 5: Scores
+    ws5 = wb.create_sheet("成绩记录")
+    ws5.append(["ID", "学生ID", "项目ID", "成绩", "得分", "测试日期", "录入人ID"])
     scores = db.query(Score).order_by(Score.test_date.desc()).all()
-    if scores:
-        student_ids = {sc.student_id for sc in scores}
-        event_ids = {sc.event_id for sc in scores}
-        students_map = {s.id: s for s in db.query(Student).filter(Student.id.in_(student_ids)).all()}
-        events_map = {e.id: e for e in db.query(SportEvent).filter(SportEvent.id.in_(event_ids)).all()}
-        for sc in scores:
-            student = students_map.get(sc.student_id)
-            event = events_map.get(sc.event_id)
-            ws2.append([student.student_id if student else "", student.name if student else "", event.name if event else "", sc.raw_value, sc.earned_score, sc.test_date.isoformat()])
+    for sc in scores:
+        ws5.append([sc.id, sc.student_id, sc.event_id, sc.raw_value, sc.earned_score, sc.test_date.isoformat(), sc.recorder_id or ""])
+
+    # Sheet 6: Admins
+    ws6 = wb.create_sheet("管理员")
+    ws6.append(["ID", "用户名", "密码哈希", "超管", "显示名"])
+    admins = db.query(Admin).order_by(Admin.id).all()
+    for a in admins:
+        ws6.append([a.id, a.username, a.password_hash, a.is_super, a.display_name])
+
+    # Sheet 7: System Config
+    ws7 = wb.create_sheet("系统设置")
+    ws7.append(["键", "值"])
+    configs = db.query(SystemConfig).all()
+    for cfg in configs:
+        ws7.append([cfg.key, cfg.value])
 
     buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=sports_backup.xlsx"})
+
+@router.post("/restore-all")
+def restore_all_data(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Restore all data from backup Excel file."""
+    try:
+        wb = openpyxl.load_workbook(file.file, data_only=True)
+    except Exception:
+        raise HTTPException(400, "无法读取文件，请确认是备份Excel文件")
+
+    def get_sheet(name):
+        if name in wb.sheetnames:
+            return list(wb[name].iter_rows(min_row=2, values_only=True))
+        return []
+
+    # Read all sheets
+    classes_data = [{"id": int(r[0]), "grade": str(r[1]), "name": str(r[2])} for r in get_sheet("班级信息") if r[0] is not None]
+    events_data = []
+    for r in get_sheet("体育项目"):
+        if r[0] is not None:
+            events_data.append({
+                "id": int(r[0]), "name": str(r[1]), "gender": Gender(str(r[2])) if r[2] else Gender.both,
+                "higher_better": r[3] in (True, "True", "true", 1, "1"),
+                "unit": str(r[4]), "input_format": InputFormat(str(r[5])) if r[5] else InputFormat.decimal_seconds,
+                "sort_order": int(r[6] or 0)
+            })
+    standards_data = []
+    for r in get_sheet("评分标准"):
+        if r[0] is not None:
+            standards_data.append({
+                "id": int(r[0]), "event_id": int(r[1]),
+                "gender": Gender(str(r[2])) if r[2] else Gender.both,
+                "score": int(r[3]), "standard_value": str(r[4])
+            })
+    students_data = []
+    for r in get_sheet("学生信息"):
+        if r[0] is not None:
+            students_data.append({
+                "id": int(r[0]), "student_id": str(r[1]), "name": str(r[2]),
+                "gender": Gender(str(r[3])) if r[3] else Gender.M, "class_id": int(r[4]),
+                "password_hash": str(r[5]) if len(r) > 5 and r[5] else ""
+            })
+    scores_data = []
+    for r in get_sheet("成绩记录"):
+        if r[0] is not None:
+            scores_data.append({
+                "id": int(r[0]), "student_id": int(r[1]), "event_id": int(r[2]),
+                "raw_value": str(r[3]), "earned_score": int(r[4]),
+                "test_date": date.fromisoformat(str(r[5])) if r[5] else date.today(),
+                "recorder_id": int(r[6]) if r[6] and str(r[6]).strip() else None
+            })
+    admins_data = [{"id": int(r[0]), "username": str(r[1]), "password_hash": str(r[2]), "is_super": r[3] in (True, "True", "true", 1, "1"), "display_name": str(r[4])} for r in get_sheet("管理员") if r[0] is not None]
+    configs_data = [{"key": str(r[0]), "value": str(r[1])} for r in get_sheet("系统设置") if r[0] is not None]
+
+    try:
+        # Delete in reverse dependency order
+        db.query(Score).delete()
+        db.query(ScoringStandard).delete()
+        db.query(Student).delete()
+        db.query(SportEvent).delete()
+        db.query(Class).delete()
+        db.query(Admin).delete()
+        db.query(SystemConfig).delete()
+        db.flush()
+
+        # Insert in dependency order
+        for d in classes_data:
+            db.add(Class(**d))
+        for d in events_data:
+            db.add(SportEvent(**d))
+        for d in standards_data:
+            db.add(ScoringStandard(**d))
+        for d in students_data:
+            db.add(Student(**d))
+        for d in scores_data:
+            db.add(Score(**d))
+        for d in admins_data:
+            db.add(Admin(**d))
+        for d in configs_data:
+            db.add(SystemConfig(**d))
+        db.flush()
+
+        # Reset auto-increment sequences
+        for tbl in ['classes', 'sport_events', 'scoring_standards', 'students', 'scores', 'admins']:
+            db.execute(text(f"SELECT setval('{tbl}_id_seq', COALESCE((SELECT MAX(id) FROM {tbl}), 1))"))
+
+        db.commit()
+        return {"ok": True, "classes": len(classes_data), "events": len(events_data), "standards": len(standards_data),
+                "students": len(students_data), "scores": len(scores_data), "admins": len(admins_data), "configs": len(configs_data)}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"恢复失败: {e}")
 
 @router.delete("/clear-all")
 def clear_all_scores(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):

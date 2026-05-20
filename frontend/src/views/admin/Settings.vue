@@ -96,6 +96,8 @@
         <el-divider />
         <h4 style="margin-bottom:8px">数据维护</h4>
         <el-button @click="backupData" style="width:100%;margin-bottom:8px">备份全部数据 (Excel)</el-button>
+        <input type="file" ref="restoreFile" accept=".xlsx" style="display:none" @change="restoreData" />
+        <el-button @click="$refs.restoreFile.click()" style="width:100%;margin-bottom:8px">导入备份数据</el-button>
         <el-divider />
         <h4 style="color:#e6a23c;margin-bottom:8px">危险操作</h4>
         <el-button type="danger" @click="clearScores" style="width:100%">清空所有成绩数据</el-button>
@@ -171,6 +173,26 @@ async function saveConfig() {
 function backupData() {
   const token = localStorage.getItem('admin_token')
   window.open(`/api/scores/backup-all?token=${encodeURIComponent(token)}`)
+}
+
+async function restoreData(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  try {
+    await ElMessageBox.confirm(
+      '导入备份将覆盖当前所有数据（班级、项目、学生、成绩、管理员、设置），此操作不可恢复！确定继续？',
+      '危险操作', { type: 'error', confirmButtonText: '确定导入' }
+    )
+  } catch { return }
+  const form = new FormData()
+  form.append('file', file)
+  try {
+    const res = await api.post('/scores/restore-all', form)
+    ElMessage.success(`已恢复：${res.data.classes}个班级, ${res.data.events}个项目, ${res.data.students}名学生, ${res.data.scores}条成绩, ${res.data.admins}个管理员, ${res.data.configs}项设置`)
+    setTimeout(() => location.reload(), 1500)
+  } catch (err) {
+    ElMessage.error(err.response?.data?.detail || '恢复失败')
+  }
 }
 
 async function clearScores() {
