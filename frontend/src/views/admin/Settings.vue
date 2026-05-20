@@ -196,9 +196,18 @@ async function restoreData(e) {
 }
 
 async function clearScores() {
-  await ElMessageBox.confirm('确定清空所有成绩数据吗？此操作不可恢复！', '危险操作', { type: 'error', confirmButtonText: '确定清空' })
-  await api.delete('/scores/clear-all')
-  ElMessage.success('已清空所有成绩')
+  try {
+    await ElMessageBox.confirm('确定清空所有成绩数据吗？此操作不可恢复！', '危险操作', { type: 'error', confirmButtonText: '下一步' })
+  } catch { return }
+  try {
+    const { value: password } = await ElMessageBox.prompt('请输入超级管理员密码以确认操作', '身份验证', { inputType: 'password', confirmButtonText: '确认清空' })
+    if (!password) return
+    await api.delete('/scores/clear-all', { data: { password } })
+    ElMessage.success('已清空所有成绩')
+  } catch (err) {
+    if (err === 'cancel' || err === 'close') return
+    ElMessage.error(err.response?.data?.detail || '操作失败')
+  }
 }
 </script>
 

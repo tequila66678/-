@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..database import get_db
 from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat, Gender
 from ..schemas import ScoreBatchSave, ScoreWithChange
-from ..auth import get_current_admin, get_current_admin_flexible
+from ..auth import get_current_admin, get_current_admin_flexible, get_super_admin, verify_password
 from ..scoring import calculate_score, normalize_time_ms
 import openpyxl
 from io import BytesIO
@@ -784,8 +784,14 @@ def restore_all_data(
         raise HTTPException(500, f"恢复失败: {e}")
 
 @router.delete("/clear-all")
-def clear_all_scores(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
-    """Delete all score records (to fix incorrect data)."""
+def clear_all_scores(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_super_admin)
+):
+    """Delete all score records (super admin only, password required)."""
+    if not verify_password(payload.get("password", ""), current.password_hash):
+        raise HTTPException(403, "密码错误")
     count = db.query(Score).count()
     db.query(Score).delete()
     db.commit()
