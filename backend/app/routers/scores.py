@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import get_db
 from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat
 from ..schemas import ScoreBatchSave, ScoreWithChange
-from ..auth import get_current_admin
+from ..auth import get_current_admin, get_current_admin_flexible
 from ..scoring import calculate_score, normalize_time_ms
 import openpyxl
 from io import BytesIO
@@ -589,7 +589,7 @@ def get_class_students(
     return [{"id": s.id, "student_id": s.student_id, "name": s.name, "gender": s.gender.value} for s in students]
 
 @router.get("/backup-all")
-def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
+def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin_flexible)):
     """Backup all students and scores as Excel."""
     wb = openpyxl.Workbook()
 

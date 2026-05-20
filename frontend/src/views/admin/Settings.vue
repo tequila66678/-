@@ -168,17 +168,9 @@ async function saveConfig() {
   ElMessage.success('已保存')
 }
 
-async function backupData() {
-  try {
-    const res = await api.get('/scores/backup-all', { responseType: 'blob' })
-    const url = URL.createObjectURL(res.data)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'sports_backup.xlsx'; a.click()
-    URL.revokeObjectURL(url)
-    ElMessage.success('备份完成')
-  } catch {
-    ElMessage.error('备份失败，请重试')
-  }
+function backupData() {
+  const token = localStorage.getItem('admin_token')
+  window.open(`/api/scores/backup-all?token=${encodeURIComponent(token)}`)
 }
 
 async function clearScores() {

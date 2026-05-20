@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
+from typing import Optional
 from jose import jwt, JWTError
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from .config import settings
@@ -9,6 +10,7 @@ from .database import get_db
 from .models import Admin
 
 bearer_scheme = HTTPBearer()
+optional_bearer = HTTPBearer(auto_error=False)
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -44,6 +46,23 @@ def get_super_admin(current: Admin = Depends(get_current_admin)) -> Admin:
     if not current.is_super:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要超级管理员权限")
     return current
+
+def get_current_admin_flexible(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_bearer),
+    token: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+) -> Admin:
+    """Auth for file downloads: tries Bearer header first, then ?token= query param."""
+    for t in ([credentials.credentials] if credentials else []) + ([token] if token else []):
+        try:
+            payload = jwt.decode(t, settings.secret_key, algorithms=[settings.jwt_algorithm])
+            admin_id = int(payload.get("sub"))
+            admin = db.query(Admin).get(admin_id)
+            if admin:
+                return admin
+        except (JWTError, ValueError, TypeError):
+            continue
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的登录凭证")
 
 def verify_student_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
