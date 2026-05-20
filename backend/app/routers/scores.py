@@ -107,6 +107,15 @@ def batch_save_scores(
     db.commit()
     return results
 
+@router.delete("/{score_id}")
+def delete_score(score_id: int, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
+    sc = db.query(Score).get(score_id)
+    if not sc:
+        raise HTTPException(404, "成绩记录不存在")
+    db.delete(sc)
+    db.commit()
+    return {"ok": True}
+
 @router.get("/class-stats")
 def class_stats(
     class_id: int = Query(...),

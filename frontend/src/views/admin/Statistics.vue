@@ -97,7 +97,11 @@
           <el-card v-if="studentStats.scores_by_event">
             <template #header>成绩记录</template>
             <div v-for="(scoreList, eventName) in studentStats.scores_by_event" :key="eventName" style="margin:6px 0">
-              <strong>{{ eventName }}</strong>: <span v-for="sc in scoreList" :key="sc.id" style="margin-left:6px;font-size:13px">{{ sc.earned_score }}分({{ sc.test_date }})</span>
+              <strong>{{ eventName }}</strong>:
+              <span v-for="sc in scoreList" :key="sc.id" style="margin-left:6px;font-size:13px">
+                {{ sc.earned_score }}分({{ sc.test_date }})
+                <el-button text type="danger" size="small" @click="deleteScore(sc.id)" style="padding:0;margin:0;font-size:11px">×</el-button>
+              </span>
             </div>
           </el-card>
         </div>
@@ -111,6 +115,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 import ExportDialog from '../../components/ExportDialog.vue'
 
@@ -163,6 +168,13 @@ async function loadStudentStats() {
   const params = {}
   if (studentEventIds.value.length) params.event_ids = studentEventIds.value.join(',')
   const res = await api.get(`/scores/student-stats/${currentStudentId}`, { params }); studentStats.value = res.data
+}
+
+async function deleteScore(scoreId) {
+  try { await ElMessageBox.confirm('确定删除这条成绩记录？', '确认删除', { type: 'warning' }) } catch { return }
+  await api.delete(`/scores/${scoreId}`)
+  ElMessage.success('已删除')
+  loadStudentStats()
 }
 
 function reloadStudentStats() { if (currentStudentId) loadStudentStats() }

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Student, Class, Admin
+from ..models import Student, Class, Admin, Score
 from ..schemas import StudentCreate, StudentOut, StudentBatchUpdate
 from ..auth import get_current_admin, hash_password
 import openpyxl
@@ -85,6 +85,7 @@ def delete_student(student_id: int, db: Session = Depends(get_db), current: Admi
     s = db.query(Student).get(student_id)
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
+    db.query(Score).filter(Score.student_id == student_id).delete()
     db.delete(s)
     db.commit()
     return {"ok": True}
