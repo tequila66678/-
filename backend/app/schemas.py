@@ -136,6 +136,9 @@ class StudentStatsOut(BaseModel):
     scores_by_event: dict[str, list[ScoreOut]]
     recommended_events: list[dict]
 
+class ClearAllRequest(BaseModel):
+    password: str
+
 # Admin
 class AdminCreate(BaseModel):
     username: str
