@@ -202,7 +202,7 @@ async function clearScores() {
   try {
     const { value: password } = await ElMessageBox.prompt('请输入超级管理员密码以确认操作', '身份验证', { inputType: 'password', confirmButtonText: '确认清空' })
     if (!password) return
-    await api.delete('/scores/clear-all', { data: { password } })
+    await api.post('/scores/clear-all', { password })
     ElMessage.success('已清空所有成绩')
   } catch (err) {
     if (err === 'cancel' || err === 'close') return

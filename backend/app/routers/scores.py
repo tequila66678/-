@@ -783,7 +783,7 @@ def restore_all_data(
         db.rollback()
         raise HTTPException(500, f"恢复失败: {e}")
 
-@router.delete("/clear-all")
+@router.post("/clear-all")
 def clear_all_scores(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
