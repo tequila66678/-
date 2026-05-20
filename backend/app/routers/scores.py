@@ -289,7 +289,7 @@ def export_class_scores(
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={cls.grade}{cls.name}_scores.xlsx"}
+        headers={"Content-Disposition": f"attachment; filename=class_{class_id}_scores.xlsx"}
     )
 
 @router.get("/export/student/{student_id}")
@@ -335,7 +335,7 @@ def export_student_scores(
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={s.name}_{s.student_id}_scores.xlsx"}
+        headers={"Content-Disposition": f"attachment; filename=student_{student_id}_scores.xlsx"}
     )
 
 @router.get("/school-stats")
@@ -579,7 +579,7 @@ def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_
         content = "\n".join(lines)
         return StreamingResponse(
             iter([content]), media_type="text/plain; charset=utf-8",
-            headers={"Content-Disposition": f"attachment; filename=export_{scope_label}_{mode_label}.txt"}
+            headers={"Content-Disposition": f"attachment; filename=export_{scope}_{mode}.txt"}
         )
 
     # xlsx
@@ -600,7 +600,7 @@ def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_
     wb.save(buffer); buffer.seek(0)
     return StreamingResponse(
         buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=export_{scope_label}_{mode_label}.xlsx"}
+        headers={"Content-Disposition": f"attachment; filename=export_{scope}_{mode}.xlsx"}
     )
 
 
