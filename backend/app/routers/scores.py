@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat
 from ..schemas import ScoreBatchSave, ScoreWithChange
@@ -597,19 +597,29 @@ def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_
     ws1 = wb.active
     ws1.title = "学生信息"
     ws1.append(["ID", "学号", "姓名", "性别", "班级"])
-    students = db.query(Student).options(joinedload(Student.class_)).order_by(Student.student_id).all()
+    students = db.query(Student).order_by(Student.student_id).all()
+    if students:
+        class_ids = {s.class_id for s in students}
+        classes_map = {c.id: c for c in db.query(Class).filter(Class.id.in_(class_ids)).all()}
+    else:
+        classes_map = {}
     for s in students:
-        cls = s.class_
+        cls = classes_map.get(s.class_id)
         ws1.append([s.id, s.student_id, s.name, s.gender.value, f"{cls.grade}{cls.name}" if cls else ""])
 
     # Sheet 2: Scores
     ws2 = wb.create_sheet("成绩记录")
     ws2.append(["学生学号", "学生姓名", "项目", "成绩", "得分", "测试日期"])
-    scores = db.query(Score).options(joinedload(Score.student), joinedload(Score.event)).order_by(Score.test_date.desc()).all()
-    for sc in scores:
-        student = sc.student
-        event = sc.event
-        ws2.append([student.student_id if student else "", student.name if student else "", event.name if event else "", sc.raw_value, sc.earned_score, sc.test_date.isoformat()])
+    scores = db.query(Score).order_by(Score.test_date.desc()).all()
+    if scores:
+        student_ids = {sc.student_id for sc in scores}
+        event_ids = {sc.event_id for sc in scores}
+        students_map = {s.id: s for s in db.query(Student).filter(Student.id.in_(student_ids)).all()}
+        events_map = {e.id: e for e in db.query(SportEvent).filter(SportEvent.id.in_(event_ids)).all()}
+        for sc in scores:
+            student = students_map.get(sc.student_id)
+            event = events_map.get(sc.event_id)
+            ws2.append([student.student_id if student else "", student.name if student else "", event.name if event else "", sc.raw_value, sc.earned_score, sc.test_date.isoformat()])
 
     buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
