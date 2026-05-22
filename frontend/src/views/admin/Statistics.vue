@@ -104,6 +104,11 @@
               </span>
             </div>
           </el-card>
+
+          <el-card v-if="chartOption" style="margin-top:12px">
+            <template #header>成绩趋势</template>
+            <v-chart :option="chartOption" style="height:320px" autoresize />
+          </el-card>
         </div>
         <div v-else style="text-align:center;color:#ccc;padding:40px">请搜索学生姓名或学号</div>
       </el-tab-pane>
@@ -114,10 +119,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 import ExportDialog from '../../components/ExportDialog.vue'
+import VChart from 'vue-echarts'
+import 'echarts'
 
 const activeTab = ref('school')
 const classes = ref([])
@@ -178,6 +185,41 @@ async function deleteScore(scoreId) {
 }
 
 function reloadStudentStats() { if (currentStudentId) loadStudentStats() }
+
+const chartOption = computed(() => {
+  if (!studentStats.value?.scores_by_event) return null
+  const data = studentStats.value.scores_by_event
+  const eventNames = Object.keys(data).filter(k => data[k].length >= 2)
+  if (!eventNames.length) return null
+
+  const allDates = new Set()
+  const eventData = {}
+  for (const name of eventNames) {
+    eventData[name] = {}
+    for (const s of data[name]) {
+      allDates.add(s.test_date)
+      eventData[name][s.test_date] = s.earned_score
+    }
+  }
+  const dates = [...allDates].sort()
+  const colors = ['#409EFF','#67C23A','#E6A23C','#F56C6C','#909399','#B37FEB','#36CFC9','#FF85C0']
+  const series = eventNames.map((name, i) => ({
+    name, type: 'line', smooth: true,
+    color: colors[i % colors.length],
+    data: dates.map(d => eventData[name][d] ?? null),
+    label: { show: true, formatter: '{c}分', fontSize: 11 },
+    emphasis: { focus: 'series' }
+  }))
+
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 11 } },
+    grid: { left: 36, right: 16, top: 10, bottom: 40 },
+    xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30, fontSize: 10 } },
+    yAxis: { type: 'value', min: 0, max: 10, interval: 1, name: '得分' },
+    series
+  }
+})
 </script>
 
 <style scoped>

@@ -9,6 +9,7 @@
         <el-option v-for="c in classes" :key="c.id" :label="c.label" :value="c.id" />
       </el-select>
       <div class="tb-actions">
+        <el-button size="small" type="primary" @click="showAdd = true">新增</el-button>
         <el-button size="small" @click="downloadTemplate">模板</el-button>
         <el-button size="small" type="primary" @click="showImport = true">导入</el-button>
         <el-button size="small" @click="showBatchEdit = true">批量</el-button>
@@ -109,6 +110,24 @@
         <el-button type="primary" @click="saveEdit" style="width:100%">保存</el-button>
       </el-form>
     </el-dialog>
+
+    <el-dialog v-model="showAdd" title="新增学生" width="90%">
+      <el-form label-width="60px">
+        <el-form-item label="学号"><el-input v-model="newStudent.student_id" maxlength="6" /></el-form-item>
+        <el-form-item label="姓名"><el-input v-model="newStudent.name" /></el-form-item>
+        <el-form-item label="性别">
+          <el-select v-model="newStudent.gender" style="width:100%">
+            <el-option label="男" value="M" /><el-option label="女" value="F" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="班级">
+          <el-select v-model="newStudent.class_id" style="width:100%">
+            <el-option v-for="c in classes" :key="c.id" :label="c.label" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-button type="primary" @click="addStudent" style="width:100%">确认新增</el-button>
+      </el-form>
+    </el-dialog>
   </div>
 </template>
 
@@ -131,7 +150,10 @@ const importResult = ref(null)
 const batchFromClass = ref(null)
 const batchToClass = ref(null)
 const batchResetPwd = ref(false)
+const showEdit = ref(false)
 const editForm = ref(null)
+const showAdd = ref(false)
+const newStudent = ref({ student_id: '', name: '', gender: 'M', class_id: null })
 const isMobile = ref(window.innerWidth < 768)
 
 onMounted(async () => {
@@ -173,6 +195,19 @@ function editStudent(row) {
 async function saveEdit() {
   await api.put(`/students/${editForm.value.id}`, { student_id: editForm.value.student_id, name: editForm.value.name, gender: editForm.value.gender, class_id: editForm.value.class_id })
   ElMessage.success('修改成功'); showEdit.value = false; loadStudents()
+}
+
+async function addStudent() {
+  if (!newStudent.value.class_id) { ElMessage.warning('请选择班级'); return }
+  try {
+    await api.post('/students', newStudent.value)
+    ElMessage.success('已新增')
+    showAdd.value = false
+    newStudent.value = { student_id: '', name: '', gender: 'M', class_id: null }
+    loadStudents()
+  } catch (err) {
+    ElMessage.error(err.response?.data?.detail || '添加失败')
+  }
 }
 
 const selectedIds = ref([])

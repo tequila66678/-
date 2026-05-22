@@ -120,7 +120,7 @@ async function doPreview() {
     if (eventIds.value.length) params.event_ids = eventIds.value.join(',')
     if (dateRange.value) { params.date_from = dateRange.value[0]; params.date_to = dateRange.value[1] }
     const res = await api.post('/scores/export/preview', null, { params })
-    preview.value = res.data.rows.slice(0, 20)
+    preview.value = res.data.rows
     total.value = res.data.total
     exportProgress.value = 100
     ElMessage.success(`查询到 ${total.value} 条记录`)
