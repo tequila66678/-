@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat, Gender
 from ..schemas import ScoreBatchSave, ScoreWithChange, ClearAllRequest
 from ..auth import get_current_admin, get_current_admin_flexible, get_super_admin, verify_password
-from ..scoring import calculate_score, normalize_time_ms
+from ..scoring import calculate_score, normalize_time_ms, parse_value
 import openpyxl
 from io import BytesIO
 from datetime import date
