@@ -217,11 +217,18 @@ def student_stats(
     scores_by_event = defaultdict(list)
     for sc in all_scores:
         event = db.query(SportEvent).get(sc.event_id)
+        try:
+            nv = parse_value(sc.raw_value, event.input_format)
+        except (ValueError, AttributeError):
+            nv = None
         scores_by_event[event.name].append({
             "id": sc.id,
             "raw_value": sc.raw_value,
             "earned_score": sc.earned_score,
-            "test_date": sc.test_date.isoformat()
+            "test_date": sc.test_date.isoformat(),
+            "numeric_value": nv,
+            "unit": event.unit,
+            "higher_better": event.higher_better
         })
 
     latest_per_event = {}
