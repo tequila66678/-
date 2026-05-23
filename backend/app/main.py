@@ -57,8 +57,8 @@ def startup():
     finally:
         db.close()
 
-# Serve the built frontend (inside app/spa/)
-frontend_web = os.path.join(os.path.dirname(__file__), "spa")
+# Serve the built frontend (Render build output)
+frontend_web = os.path.join(os.path.dirname(__file__), "f2k3m8")
 app.mount("/assets", StaticFiles(directory=os.path.join(frontend_web, "assets")), name="assets")
 
 def _get_index_js():
