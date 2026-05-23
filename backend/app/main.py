@@ -57,21 +57,20 @@ def startup():
     finally:
         db.close()
 
-# In production (Render), serve the built frontend
-frontend_static = os.path.join(os.path.dirname(__file__), "..", "static")
-app.mount("/assets", StaticFiles(directory=os.path.join(frontend_static, "assets")), name="assets")
+# Serve the built frontend (inside app/web/)
+frontend_web = os.path.join(os.path.dirname(__file__), "web")
+app.mount("/assets", StaticFiles(directory=os.path.join(frontend_web, "assets")), name="assets")
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "static2", "has_static": os.path.isdir(frontend_static)}
+    return {"status": "ok", "version": "web"}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # skip API paths
     if full_path.startswith("api/"):
         from fastapi.responses import JSONResponse
         return JSONResponse({"detail": "Not Found"}, 404)
-    file_path = os.path.join(frontend_static, full_path)
+    file_path = os.path.join(frontend_web, full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
-    return FileResponse(os.path.join(frontend_static, "index.html"))
+    return FileResponse(os.path.join(frontend_web, "index.html"))
