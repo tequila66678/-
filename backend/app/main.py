@@ -63,7 +63,10 @@ app.mount("/assets", StaticFiles(directory=os.path.join(frontend_web, "assets"))
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "web"}
+    import glob as _g
+    web = os.path.join(os.path.dirname(__file__), "web")
+    files = _g.glob(f"{web}/assets/index-*.js") if os.path.isdir(web) else []
+    return {"status": "ok", "version": "web2", "web_exists": os.path.isdir(web), "index_files": [os.path.basename(f) for f in files]}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
