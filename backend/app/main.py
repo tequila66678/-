@@ -59,10 +59,10 @@ def startup():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": "d54e716"}
+    return {"status": "ok", "version": "static"}
 
 # In production (Render), serve the built frontend
-frontend_dist = os.path.join(os.path.dirname(__file__), "..", "dist")
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.isdir(frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
 
