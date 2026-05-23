@@ -189,7 +189,9 @@ function reloadStudentStats() { if (currentStudentId) loadStudentStats() }
 const chartOption = computed(() => {
   if (!studentStats.value?.scores_by_event) return null
   const data = studentStats.value.scores_by_event
-  const eventNames = Object.keys(data).filter(k => data[k].length >= 2)
+  const eventNames = Object.keys(data).filter(k => {
+    return data[k].length >= 2 && data[k].some(s => s.numeric_value != null)
+  })
   if (!eventNames.length) return null
 
   const allDates = new Set()
@@ -198,25 +200,58 @@ const chartOption = computed(() => {
     eventData[name] = {}
     for (const s of data[name]) {
       allDates.add(s.test_date)
-      eventData[name][s.test_date] = s.earned_score
+      eventData[name][s.test_date] = { numeric: s.numeric_value, raw: s.raw_value, score: s.earned_score, unit: s.unit, higher: s.higher_better }
     }
   }
   const dates = [...allDates].sort()
   const colors = ['#409EFF','#67C23A','#E6A23C','#F56C6C','#909399','#B37FEB','#36CFC9','#FF85C0']
-  const series = eventNames.map((name, i) => ({
-    name, type: 'line', smooth: true,
-    color: colors[i % colors.length],
-    data: dates.map(d => eventData[name][d] ?? null),
-    label: { show: true, formatter: '{c}分', fontSize: 11 },
-    emphasis: { focus: 'series' }
-  }))
+
+  const yAxes = []
+  const series = eventNames.map((name, i) => {
+    const side = i % 2 === 0 ? 'left' : 'right'
+    const offset = Math.floor(i / 2) * 50
+    const unit = data[name][0]?.unit || ''
+    const higherBetter = data[name][0]?.higher_better
+    yAxes.push({
+      type: 'value', name: unit, nameTextStyle: { fontSize: 10 },
+      position: side, offset: offset || undefined,
+      axisLabel: { fontSize: 9 },
+      splitLine: { show: i === 0 },
+      inverse: higherBetter === false
+    })
+    const seriesData = dates.map(d => {
+      const pt = eventData[name][d]
+      return pt ? { value: pt.numeric, raw: pt.raw, score: pt.score } : null
+    })
+    return {
+      name, type: 'line', smooth: true,
+      yAxisIndex: i, color: colors[i % colors.length],
+      data: seriesData,
+      label: { show: true, formatter: p => p.data ? `${p.data.raw} (${p.data.score}分)` : '', fontSize: 10 },
+      emphasis: { focus: 'series' },
+      markLine: i === 0 ? { silent: true, symbol: 'none', data: [] } : undefined
+    }
+  })
 
   return {
-    tooltip: { trigger: 'axis' },
-    legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 11 } },
-    grid: { left: 36, right: 16, top: 10, bottom: 40 },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const date = params[0]?.axisValue || ''
+        let tip = date + '<br/>'
+        for (const p of params) {
+          if (p.data) {
+            const dir = data[p.seriesName]?.[0]?.higher_better ? '越大越好' : '越小越好'
+            tip += `${p.marker} ${p.seriesName}: ${p.data.raw} (${p.data.score}分) ${dir}<br/>`
+          }
+        }
+        return tip
+      }
+    },
+    legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 10 } },
+    grid: { left: 45, right: 45, top: 10, bottom: 50 },
     xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30, fontSize: 10 } },
-    yAxis: { type: 'value', min: 0, max: 10, interval: 1, name: '得分' },
+    yAxis: yAxes,
     series
   }
 })
