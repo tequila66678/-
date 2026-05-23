@@ -61,6 +61,17 @@ def startup():
 def health():
     return {"status": "ok", "version": "static"}
 
+@app.get("/api/debug-files")
+def debug_files():
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+    result = {"static_dir": static_dir, "exists": os.path.isdir(static_dir)}
+    if os.path.isdir(static_dir):
+        result["files"] = os.listdir(static_dir)
+        assets_dir = os.path.join(static_dir, "assets")
+        if os.path.isdir(assets_dir):
+            result["assets"] = os.listdir(assets_dir)[:5]
+    return result
+
 # In production (Render), serve the built frontend
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "static")
 if os.path.isdir(frontend_dist):
