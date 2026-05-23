@@ -102,7 +102,13 @@ def _render_index_html():
 @app.get("/api/health")
 def health():
     js = _get_index_js()
-    return {"status": "ok", "js": js}
+    assets = os.path.join(frontend_web, "assets")
+    all_files = {}
+    if os.path.isdir(assets):
+        for f in sorted(os.listdir(assets)):
+            fp = os.path.join(assets, f)
+            all_files[f] = os.path.getsize(fp) if os.path.isfile(fp) else 0
+    return {"status": "ok", "js": js, "spa_dir": frontend_web, "spa_exists": os.path.isdir(frontend_web), "assets_count": len(all_files), "assets_detail": all_files}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
