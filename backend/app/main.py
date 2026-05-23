@@ -57,8 +57,8 @@ def startup():
     finally:
         db.close()
 
-# Serve the built frontend (inside app/web/)
-frontend_web = os.path.join(os.path.dirname(__file__), "web")
+# Serve the built frontend (inside app/spa/)
+frontend_web = os.path.join(os.path.dirname(__file__), "spa")
 app.mount("/assets", StaticFiles(directory=os.path.join(frontend_web, "assets")), name="assets")
 
 def _get_index_js():
@@ -102,21 +102,7 @@ def _render_index_html():
 @app.get("/api/health")
 def health():
     js = _get_index_js()
-    assets = os.path.join(frontend_web, "assets")
-    all_assets = sorted(os.listdir(assets))[:20] if os.path.isdir(assets) else []
-    # Also check if old paths exist
-    old_static = os.path.join(os.path.dirname(__file__), "..", "static")
-    old_frontend = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
-    return {
-        "status": "ok", "version": "dynamic3",
-        "js": js, "assets_count": len(all_assets), "first_assets": all_assets[:6],
-        "paths": {
-            "web": frontend_web,
-            "web_exists": os.path.isdir(frontend_web),
-            "old_static_exists": os.path.isdir(old_static),
-            "old_frontend_exists": os.path.isdir(old_frontend)
-        }
-    }
+    return {"status": "ok", "js": js}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
