@@ -62,12 +62,12 @@ frontend_web = os.path.join(os.path.dirname(__file__), "web")
 app.mount("/assets", StaticFiles(directory=os.path.join(frontend_web, "assets")), name="assets")
 
 def _get_index_js():
-    """Scan assets for the latest index-*.js bundle."""
+    """Scan assets for the main index-*.js bundle (largest file)."""
     assets = os.path.join(frontend_web, "assets")
     if not os.path.isdir(assets):
         return None
     candidates = [f for f in os.listdir(assets) if f.startswith("index-") and f.endswith(".js")]
-    candidates.sort(reverse=True)
+    candidates.sort(key=lambda f: os.path.getsize(os.path.join(assets, f)), reverse=True)
     return candidates[0] if candidates else None
 
 def _get_index_css():
