@@ -59,7 +59,7 @@ def startup():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "d54e716"}
 
 # In production (Render), serve the built frontend
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "dist")
