@@ -61,12 +61,48 @@ def startup():
 frontend_web = os.path.join(os.path.dirname(__file__), "web")
 app.mount("/assets", StaticFiles(directory=os.path.join(frontend_web, "assets")), name="assets")
 
+def _get_index_js():
+    """Scan assets for the latest index-*.js bundle."""
+    assets = os.path.join(frontend_web, "assets")
+    if not os.path.isdir(assets):
+        return None
+    candidates = [f for f in os.listdir(assets) if f.startswith("index-") and f.endswith(".js")]
+    candidates.sort(reverse=True)
+    return candidates[0] if candidates else None
+
+def _get_index_css():
+    """Scan assets for the latest index-*.css bundle."""
+    assets = os.path.join(frontend_web, "assets")
+    if not os.path.isdir(assets):
+        return None
+    candidates = [f for f in os.listdir(assets) if f.startswith("index-") and f.endswith(".css")]
+    candidates.sort(reverse=True)
+    return candidates[0] if candidates else None
+
+def _render_index_html():
+    js = _get_index_js()
+    css = _get_index_css()
+    if not js:
+        return "<html><body>Frontend not built</body></html>"
+    css_tag = f'<link rel="stylesheet" crossorigin href="/assets/{css}">' if css else ''
+    return f'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>体育成绩管理系统</title>
+  <script type="module" crossorigin src="/assets/{js}"></script>
+  {css_tag}
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>'''
+
 @app.get("/api/health")
 def health():
-    import glob as _g
-    web = os.path.join(os.path.dirname(__file__), "web")
-    files = _g.glob(f"{web}/assets/index-*.js") if os.path.isdir(web) else []
-    return {"status": "ok", "version": "web2", "web_exists": os.path.isdir(web), "index_files": [os.path.basename(f) for f in files]}
+    js = _get_index_js()
+    return {"status": "ok", "version": "dynamic", "js": js}
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
@@ -76,4 +112,5 @@ async def serve_frontend(full_path: str):
     file_path = os.path.join(frontend_web, full_path)
     if os.path.isfile(file_path):
         return FileResponse(file_path)
-    return FileResponse(os.path.join(frontend_web, "index.html"))
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(_render_index_html())
