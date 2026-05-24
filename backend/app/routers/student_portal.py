@@ -4,6 +4,7 @@ from ..database import get_db
 from ..models import Student, Score, SportEvent
 from ..schemas import StudentLogin, StudentPasswordChange
 from ..auth import hash_password, verify_student_password
+from ..scoring import parse_value
 from collections import defaultdict
 
 router = APIRouter(prefix="/api/student", tags=["student-portal"])
@@ -47,10 +48,18 @@ def get_my_scores(student_id: str, token: str, db: Session = Depends(get_db)):
 
     by_date = defaultdict(list)
     for sc in scores:
+        event = events.get(sc.event_id)
+        try:
+            nv = parse_value(sc.raw_value, event.input_format) if event else None
+        except (ValueError, AttributeError):
+            nv = None
         by_date[sc.test_date.isoformat()].append({
             "event_name": events[sc.event_id].name if sc.event_id in events else "未知",
             "raw_value": sc.raw_value,
-            "earned_score": sc.earned_score
+            "earned_score": sc.earned_score,
+            "numeric_value": nv,
+            "unit": event.unit if event else "",
+            "higher_better": event.higher_better if event else True
         })
 
     latest = {}

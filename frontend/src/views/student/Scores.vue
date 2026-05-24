@@ -36,6 +36,11 @@
       </div>
     </el-card>
 
+    <el-card v-if="chartOption" style="margin-top:12px">
+      <template #header>成绩趋势</template>
+      <v-chart :option="chartOption" style="height:320px" autoresize />
+    </el-card>
+
     <el-dialog v-model="showChangePwd" title="修改密码" width="90%">
       <el-form label-width="60px">
         <el-form-item label="原密码"><el-input v-model="oldPwd" type="password" /></el-form-item>
@@ -47,10 +52,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../../api'
 import { ElMessage } from 'element-plus'
+import VChart from 'vue-echarts'
+import 'echarts'
 
 const router = useRouter()
 const schoolName = ref('体育成绩管理系统')
@@ -89,6 +96,85 @@ async function changePassword() {
 }
 
 function logout() { sessionStorage.clear(); router.push('/student/login') }
+
+const chartOption = computed(() => {
+  const hist = history.value
+  if (!hist || Object.keys(hist).length === 0) return null
+
+  // Transform history_by_date into scores_by_event
+  const scoresByEvent = {}
+  for (const [date, items] of Object.entries(hist)) {
+    for (const item of items) {
+      if (!scoresByEvent[item.event_name]) scoresByEvent[item.event_name] = []
+      scoresByEvent[item.event_name].push({ ...item, test_date: date })
+    }
+  }
+
+  const eventNames = Object.keys(scoresByEvent).filter(k => {
+    return scoresByEvent[k].length >= 2 && scoresByEvent[k].some(s => s.numeric_value != null)
+  })
+  if (!eventNames.length) return null
+
+  const allDates = new Set()
+  const eventData = {}
+  for (const name of eventNames) {
+    eventData[name] = {}
+    for (const s of scoresByEvent[name]) {
+      allDates.add(s.test_date)
+      eventData[name][s.test_date] = { numeric: s.numeric_value, raw: s.raw_value, score: s.earned_score, unit: s.unit, higher: s.higher_better }
+    }
+  }
+  const dates = [...allDates].sort()
+  const colors = ['#409EFF','#67C23A','#E6A23C','#F56C6C','#909399','#B37FEB','#36CFC9','#FF85C0']
+
+  const yAxes = []
+  const series = eventNames.map((name, i) => {
+    const side = i % 2 === 0 ? 'left' : 'right'
+    const offset = Math.floor(i / 2) * 50
+    const unit = scoresByEvent[name][0]?.unit || ''
+    const higherBetter = scoresByEvent[name][0]?.higher_better
+    yAxes.push({
+      type: 'value', name: unit, nameTextStyle: { fontSize: 10 },
+      position: side, offset: offset || undefined,
+      axisLabel: { fontSize: 9 },
+      splitLine: { show: i === 0 },
+      inverse: higherBetter === false
+    })
+    const seriesData = dates.map(d => {
+      const pt = eventData[name][d]
+      return pt ? { value: pt.numeric, raw: pt.raw, score: pt.score } : null
+    })
+    return {
+      name, type: 'line', smooth: true,
+      yAxisIndex: i, color: colors[i % colors.length],
+      data: seriesData,
+      label: { show: true, formatter: p => p.data ? `${p.data.raw} (${p.data.score}分)` : '', fontSize: 10 },
+      emphasis: { focus: 'series' }
+    }
+  })
+
+  return {
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        const date = params[0]?.axisValue || ''
+        let tip = date + '<br/>'
+        for (const p of params) {
+          if (p.data) {
+            const dir = scoresByEvent[p.seriesName]?.[0]?.higher_better ? '越大越好' : '越小越好'
+            tip += `${p.marker} ${p.seriesName}: ${p.data.raw} (${p.data.score}分) ${dir}<br/>`
+          }
+        }
+        return tip
+      }
+    },
+    legend: { bottom: 0, type: 'scroll', textStyle: { fontSize: 10 } },
+    grid: { left: 45, right: 45, top: 10, bottom: 50 },
+    xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30, fontSize: 10 } },
+    yAxis: yAxes,
+    series
+  }
+})
 </script>
 
 <style scoped>
