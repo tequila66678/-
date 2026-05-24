@@ -3,7 +3,7 @@
     <div class="ss-header">
       <h3 class="ss-school">{{ schoolName }}</h3>
       <div class="ss-user">
-        <span>{{ studentInfo?.name }}</span>
+        <span>{{ studentInfo?.name }}({{ studentInfo?.gender === 'M' ? '男' : '女' }})</span>
         <el-button text size="small" @click="showChangePwd = true">改密</el-button>
         <el-button text size="small" type="danger" @click="logout">退出</el-button>
       </div>

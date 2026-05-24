@@ -180,6 +180,7 @@ def class_stats(
                         "student_id": s.id,
                         "student_name": s.name,
                         "student_no": s.student_id,
+                        "student_gender": s.gender.value,
                         "event_name": e.name,
                         "prev_score": prev_score,
                         "curr_score": curr_score
@@ -426,6 +427,7 @@ def school_stats(
                 if prev - curr >= 2:
                     warning_students.append({
                         "student_no": s.student_id, "student_name": s.name,
+                        "student_gender": s.gender.value,
                         "event_name": e.name, "prev_score": prev, "curr_score": curr
                     })
 

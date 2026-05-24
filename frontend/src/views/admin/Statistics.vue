@@ -39,7 +39,7 @@
         <div v-if="schoolStats?.warning_students?.length" style="margin-top:12px">
           <h4 style="color:#e6a23c">全校橙色预警</h4>
           <div v-for="w in schoolStats.warning_students.slice(0, 10)" :key="w.student_no" class="warn-card">
-            {{ w.student_name }}({{ w.student_no }}) {{ w.event_name }}: {{ w.prev_score }}→{{ w.curr_score }}
+            {{ w.student_name }}({{ w.student_gender === 'M' ? '男' : '女' }}) {{ w.student_no }} {{ w.event_name }}: {{ w.prev_score }}→{{ w.curr_score }}
           </div>
         </div>
       </el-tab-pane>
@@ -73,7 +73,7 @@
         <div v-if="classStats?.warning_students?.length" style="margin-top:12px">
           <h4 style="color:#e6a23c">橙色预警</h4>
           <div v-for="w in classStats.warning_students" :key="w.student_no" class="warn-card">
-            {{ w.student_name }}({{ w.student_no }}) {{ w.event_name }}: {{ w.prev_score }}→{{ w.curr_score }}
+            {{ w.student_name }}({{ w.student_gender === 'M' ? '男' : '女' }}) {{ w.student_no }} {{ w.event_name }}: {{ w.prev_score }}→{{ w.curr_score }}
           </div>
         </div>
       </el-tab-pane>
@@ -86,7 +86,7 @@
         </el-select>
 
         <div v-if="studentStats">
-          <h4>{{ studentStats.student.name }} ({{ studentStats.student.student_id }})</h4>
+          <h4>{{ studentStats.student.name }}({{ studentStats.student.gender === 'M' ? '男' : '女' }}) {{ studentStats.student.student_id }}</h4>
           <el-button type="primary" size="small" @click="showExport = true" style="margin-bottom:12px">导出个人成绩</el-button>
 
           <el-card style="margin-bottom:12px">
