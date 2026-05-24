@@ -40,7 +40,7 @@
         <div class="se-nav">
           <el-button circle @click="prevStudent" :disabled="currentIndex === 0">◀</el-button>
           <div class="se-student">
-            <div class="se-name">{{ currentStudent.name }}</div>
+            <div class="se-name">{{ currentStudent.name }} ({{ currentStudent.gender === 'M' ? '男' : '女' }})</div>
             <div class="se-id">{{ currentStudent.student_id }}</div>
           </div>
           <el-button circle @click="nextStudent" :disabled="currentIndex >= students.length - 1">▶</el-button>
