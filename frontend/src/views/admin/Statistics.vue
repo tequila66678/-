@@ -99,7 +99,7 @@
             <div v-for="(scoreList, eventName) in studentStats.scores_by_event" :key="eventName" style="margin:6px 0">
               <strong>{{ eventName }}</strong>:
               <span v-for="sc in scoreList" :key="sc.id" style="margin-left:6px;font-size:13px">
-                {{ sc.earned_score }}分({{ sc.test_date }})
+                {{ sc.raw_value }}（{{ sc.earned_score }}分）{{ sc.test_date }}
                 <el-button text type="danger" size="small" @click="deleteScore(sc.id)" style="padding:0;margin:0;font-size:11px">×</el-button>
               </span>
             </div>
