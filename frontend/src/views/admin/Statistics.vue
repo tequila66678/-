@@ -264,6 +264,7 @@ const chartOption = computed(() => {
 .stat-col h2 { margin: 4px 0; font-size: 22px; }
 .event-bar { display: flex; align-items: center; margin: 6px 0; }
 .event-name { width: 100px; font-size: 13px; flex-shrink: 0; }
-.warn-card { padding: 8px; background: #fef0f0; border-radius: 6px; margin-bottom: 4px; font-size: 13px; }
+.warn-card { padding: 8px; background: #fef0f0; border-radius: 6px; margin-bottom: 4px; font-size: 13px; animation: warn-breath 2.5s ease-in-out infinite; }
 .rec-item { font-size: 16px; margin: 4px 0; }
+@keyframes warn-breath { 0%, 100% { box-shadow: 0 0 0 0 rgba(230, 162, 60, 0); } 50% { box-shadow: 0 0 8px 3px rgba(230, 162, 60, 0.25); } }
 </style>

@@ -206,7 +206,8 @@ async function saveAndNext() {
 .se-change { margin-top: 8px; font-size: 13px; }
 .se-prev { color: #909399; margin-right: 8px; }
 .se-praise { color: #67c23a; font-weight: 600; }
-.se-warning { color: #e6a23c; font-weight: 600; }
+.se-warning { color: #e6a23c; font-weight: 600; animation: warn-pulse 1.5s ease-in-out infinite; }
+@keyframes warn-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .se-up { color: #67c23a; }
 .se-down { color: #f56c6c; }
 .se-same { color: #909399; }
