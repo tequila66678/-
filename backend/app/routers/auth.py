@@ -35,11 +35,13 @@ def switch_school(
 ):
     if not current.is_super:
         raise HTTPException(403, "仅超级管理员可切换学校")
-    school = db.query(School).get(data.school_id)
-    if not school:
-        raise HTTPException(404, "学校不存在")
     token = create_jwt(current.id, current.username, data.school_id)
     current.current_school_id = data.school_id
     out = AdminOut.model_validate(current)
-    out.school_name = school.name
+    if data.school_id:
+        school = db.query(School).get(data.school_id)
+        if school:
+            out.school_name = school.name
+    else:
+        out.school_name = "全部学校"
     return TokenOut(access_token=token, admin=out)

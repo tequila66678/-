@@ -181,4 +181,4 @@ class SchoolCreate(BaseModel):
     name: str
 
 class SwitchSchoolRequest(BaseModel):
-    school_id: int
+    school_id: Optional[int] = None
