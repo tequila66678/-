@@ -12,11 +12,19 @@ def login(data: AdminLogin, db: Session = Depends(get_db)):
     admin = db.query(Admin).filter(Admin.username == data.username).first()
     if not admin or not verify_password(data.password, admin.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
-    token = create_jwt(admin.id, admin.username, admin.school_id)
+    # Auto-assign school for super-admin with no school
+    school_id = admin.school_id
+    if admin.is_super and not school_id:
+        default_school = db.query(School).first()
+        school_id = default_school.id if default_school else None
+    token = create_jwt(admin.id, admin.username, school_id)
     out = AdminOut.model_validate(admin)
     if admin.school:
         out.school_name = admin.school.name
-    elif admin.is_super:
+    elif school_id:
+        default_school = db.query(School).get(school_id)
+        out.school_name = default_school.name if default_school else "平台管理"
+    else:
         out.school_name = "平台管理"
     return TokenOut(access_token=token, admin=out)
 
