@@ -69,6 +69,11 @@
                 <el-option label="老师" :value="false" /><el-option label="超管" :value="true" />
               </el-select>
             </el-form-item>
+            <el-form-item v-if="!newAdmin.is_super" label="学校">
+              <el-select v-model="newAdmin.school_id" style="width:100%" placeholder="选择学校">
+                <el-option v-for="s in allSchools" :key="s.id" :value="s.id" :label="s.name" />
+              </el-select>
+            </el-form-item>
             <el-button type="primary" @click="addAdmin" style="width:100%">确认新增</el-button>
           </el-form>
         </el-dialog>
@@ -123,12 +128,14 @@ const editingEventId = ref(null)
 const standardsForm = ref(Array(10).fill(''))
 
 const showAddAdmin = ref(false)
-const newAdmin = ref({ username: '', password: '', display_name: '', is_super: false })
+const newAdmin = ref({ username: '', password: '', display_name: '', is_super: false, school_id: null })
+const allSchools = ref([])
 
 onMounted(async () => {
   const [eRes, aRes, cRes] = await Promise.all([api.get('/events'), api.get('/admins'), api.get('/config')])
   events.value = eRes.data; admins.value = aRes.data
   for (const c of cRes.data) { if (c.key in config.value) config.value[c.key] = c.key.includes('threshold') ? parseInt(c.value) : c.value }
+  try { const sRes = await api.get('/schools'); allSchools.value = sRes.data } catch {}
 })
 
 async function addEvent() {

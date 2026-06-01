@@ -39,6 +39,18 @@
           <span class="school-short">{{ schoolName }}</span>
         </div>
         <div class="topbar-right">
+          <!-- School switcher for super-admin -->
+          <el-select
+            v-if="adminInfo?.is_super"
+            v-model="currentSchoolId"
+            size="small"
+            class="school-switch"
+            @change="switchSchool"
+            placeholder="全部学校"
+          >
+            <el-option :value="null" label="全部学校" />
+            <el-option v-for="s in schools" :key="s.id" :value="s.id" :label="s.name" />
+          </el-select>
           <span class="user-name">{{ adminInfo?.display_name }}</span>
           <el-button type="danger" text @click="logout">退出</el-button>
         </div>
@@ -61,20 +73,45 @@ const adminInfo = ref(null)
 const schoolName = ref('')
 const mobileOpen = ref(false)
 const isMobile = ref(window.innerWidth < 768)
+const schools = ref([])
+const currentSchoolId = ref(null)
 
 function onResize() { isMobile.value = window.innerWidth < 768 }
 
 onMounted(async () => {
   const info = localStorage.getItem('admin_info')
-  if (info) adminInfo.value = JSON.parse(info)
+  if (info) {
+    adminInfo.value = JSON.parse(info)
+    currentSchoolId.value = adminInfo.value.school_id
+  }
   try {
     const res = await api.get('/config/public')
     schoolName.value = res.data.school_name || '体育成绩管理系统'
   } catch {}
+  if (adminInfo.value?.is_super) {
+    try {
+      const res = await api.get('/schools')
+      schools.value = res.data
+    } catch {}
+  }
   window.addEventListener('resize', onResize)
 })
 
 onUnmounted(() => { window.removeEventListener('resize', onResize) })
+
+async function switchSchool(schoolId) {
+  try {
+    const res = await api.post('/auth/switch-school', { school_id: schoolId })
+    localStorage.setItem('admin_token', res.data.access_token)
+    localStorage.setItem('admin_info', JSON.stringify(res.data.admin))
+    adminInfo.value = res.data.admin
+    currentSchoolId.value = schoolId
+    schoolName.value = res.data.admin.school_name || '全部学校'
+    location.reload()
+  } catch {
+    location.reload()
+  }
+}
 
 function logout() {
   localStorage.removeItem('admin_token')
