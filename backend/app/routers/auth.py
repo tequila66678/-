@@ -19,6 +19,7 @@ def login(data: AdminLogin, db: Session = Depends(get_db)):
         school_id = default_school.id if default_school else None
     token = create_jwt(admin.id, admin.username, school_id)
     out = AdminOut.model_validate(admin)
+    out.school_id = school_id  # Override for frontend
     if admin.school:
         out.school_name = admin.school.name
     elif school_id:
