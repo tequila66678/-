@@ -50,6 +50,29 @@ def startup():
                 conn.execute(text("ALTER TABLE scoring_standards ADD COLUMN gender VARCHAR(10) DEFAULT 'both'"))
                 conn.commit()
 
+    # Safe migration: add id column to system_config if missing (old schema used key as PK)
+    if "system_config" in table_names:
+        cols = [c["name"] for c in insp.get_columns("system_config")]
+        if "id" not in cols:
+            with engine.connect() as conn:
+                try:
+                    # Drop old PK constraint if exists (name varies)
+                    try:
+                        conn.execute(text("ALTER TABLE system_config DROP CONSTRAINT system_config_pkey"))
+                    except Exception:
+                        pass
+                    conn.execute(text("ALTER TABLE system_config ADD COLUMN id SERIAL PRIMARY KEY"))
+                    conn.commit()
+                except Exception as e:
+                    print(f"WARNING: system_config migration failed: {e}")
+                    conn.rollback()
+                    # Fallback: try without PK
+                    try:
+                        conn.execute(text("ALTER TABLE system_config ADD COLUMN id SERIAL"))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+
     # Multi-tenancy migration: add school_id to existing tables if missing
     if "schools" not in table_names:
         with engine.connect() as conn:
