@@ -8,6 +8,12 @@ const routes = [
     meta: { guest: true }
   },
   {
+    path: '/admin/select-school',
+    name: 'SelectSchool',
+    component: () => import('../views/admin/SelectSchool.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/admin',
     component: () => import('../views/admin/Layout.vue'),
     meta: { requiresAuth: true },

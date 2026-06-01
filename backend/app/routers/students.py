@@ -4,12 +4,15 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Student, Class, Admin, Score
 from ..schemas import StudentCreate, StudentOut, StudentBatchUpdate
-from ..auth import get_current_admin, hash_password
+from ..auth import get_current_admin, require_school, hash_password
 import openpyxl
 from io import BytesIO
 from typing import Optional
 
 router = APIRouter(prefix="/api/students", tags=["students"])
+
+def _school_students(db: Session, school_id: int):
+    return db.query(Student).join(Class).filter(Class.school_id == school_id)
 
 @router.get("", response_model=list[StudentOut])
 def list_students(
@@ -20,14 +23,14 @@ def list_students(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    q = db.query(Student)
+    sid = require_school(current)
+    q = _school_students(db, sid)
     if search:
         q = q.filter(
             (Student.student_id.contains(search)) | (Student.name.contains(search))
         )
     if class_id:
         q = q.filter(Student.class_id == class_id)
-    total = q.count()
     students = q.order_by(Student.student_id).offset((page - 1) * page_size).limit(page_size).all()
 
     result = []
@@ -41,6 +44,10 @@ def list_students(
 
 @router.post("", response_model=StudentOut)
 def create_student(data: StudentCreate, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
+    sid = require_school(current)
+    cls = db.query(Class).filter(Class.id == data.class_id, Class.school_id == sid).first()
+    if not cls:
+        raise HTTPException(status_code=400, detail="班级不属于当前学校")
     existing = db.query(Student).filter(Student.student_id == data.student_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="学号已存在")
@@ -58,7 +65,8 @@ def create_student(data: StudentCreate, db: Session = Depends(get_db), current: 
 
 @router.get("/{student_id}", response_model=StudentOut)
 def get_student(student_id: int, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
-    s = db.query(Student).get(student_id)
+    sid = require_school(current)
+    s = _school_students(db, sid).filter(Student.id == student_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
     out = StudentOut.model_validate(s)
@@ -69,7 +77,8 @@ def get_student(student_id: int, db: Session = Depends(get_db), current: Admin =
 
 @router.put("/{student_id}", response_model=StudentOut)
 def update_student(student_id: int, data: StudentCreate, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
-    s = db.query(Student).get(student_id)
+    sid = require_school(current)
+    s = _school_students(db, sid).filter(Student.id == student_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
     s.student_id = data.student_id
@@ -82,7 +91,8 @@ def update_student(student_id: int, data: StudentCreate, db: Session = Depends(g
 
 @router.delete("/{student_id}")
 def delete_student(student_id: int, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
-    s = db.query(Student).get(student_id)
+    sid = require_school(current)
+    s = _school_students(db, sid).filter(Student.id == student_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
     db.query(Score).filter(Score.student_id == student_id).delete()
@@ -92,6 +102,7 @@ def delete_student(student_id: int, db: Session = Depends(get_db), current: Admi
 
 @router.post("/batch-import")
 def batch_import(file: UploadFile = File(...), db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
+    sid = require_school(current)
     contents = file.file.read()
     wb = openpyxl.load_workbook(BytesIO(contents))
     ws = wb.active
@@ -112,9 +123,11 @@ def batch_import(file: UploadFile = File(...), db: Session = Depends(get_db), cu
         else:
             grade = class_str
             class_name = ""
-        cls = db.query(Class).filter(Class.grade == grade, Class.name == class_name).first()
+        cls = db.query(Class).filter(
+            Class.grade == grade, Class.name == class_name, Class.school_id == sid
+        ).first()
         if not cls:
-            cls = Class(grade=grade, name=class_name)
+            cls = Class(grade=grade, name=class_name, school_id=sid)
             db.add(cls)
             db.flush()
         existing = db.query(Student).filter(Student.student_id == student_id).first()
@@ -135,7 +148,8 @@ def batch_import(file: UploadFile = File(...), db: Session = Depends(get_db), cu
 
 @router.put("/batch/update")
 def batch_update(data: StudentBatchUpdate, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
-    q = db.query(Student)
+    sid = require_school(current)
+    q = _school_students(db, sid)
     if data.class_id:
         q = q.filter(Student.class_id == data.class_id)
     students = q.all()

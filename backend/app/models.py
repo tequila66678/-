@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, Float, ForeignKey, Enum as SqlEnum
+from sqlalchemy import Column, Integer, String, Boolean, Date, Float, ForeignKey, Enum as SqlEnum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 import enum
@@ -14,11 +14,18 @@ class InputFormat(str, enum.Enum):
     decimal_meters = "decimal_meters"
     integer = "integer"
 
+class School(Base):
+    __tablename__ = "schools"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+
 class Class(Base):
     __tablename__ = "classes"
     id = Column(Integer, primary_key=True, autoincrement=True)
     grade = Column(String, nullable=False)
     name = Column(String, nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school = relationship("School")
     students = relationship("Student", back_populates="class_")
 
 class Student(Base):
@@ -41,6 +48,8 @@ class SportEvent(Base):
     unit = Column(String, nullable=False)
     input_format = Column(SqlEnum(InputFormat), nullable=False)
     sort_order = Column(Integer, default=0)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school = relationship("School")
     standards = relationship("ScoringStandard", back_populates="event", cascade="all, delete-orphan")
     scores = relationship("Score", back_populates="event")
 
@@ -62,6 +71,8 @@ class Score(Base):
     earned_score = Column(Integer, nullable=False)
     test_date = Column(Date, nullable=False)
     recorder_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school = relationship("School")
     student = relationship("Student", back_populates="scores")
     event = relationship("SportEvent", back_populates="scores")
 
@@ -72,8 +83,14 @@ class Admin(Base):
     password_hash = Column(String, nullable=False)
     is_super = Column(Boolean, default=False)
     display_name = Column(String, nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
+    school = relationship("School")
 
 class SystemConfig(Base):
     __tablename__ = "system_config"
-    key = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, nullable=False)
     value = Column(String, nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school = relationship("School")
+    __table_args__ = (UniqueConstraint("key", "school_id", name="uq_config_key_school"),)

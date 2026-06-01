@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import Student, Score, SportEvent
+from ..models import Student, Score, SportEvent, Class
 from ..schemas import StudentLogin, StudentPasswordChange
 from ..auth import hash_password, verify_student_password
 from ..scoring import parse_value
@@ -18,8 +18,12 @@ def _authenticate_student(db: Session, student_id: str, password: str) -> Studen
 @router.post("/login")
 def student_login(data: StudentLogin, db: Session = Depends(get_db)):
     student = _authenticate_student(db, data.student_id, data.password)
+    school_id = None
+    if student.class_ and student.class_.school_id:
+        school_id = student.class_.school_id
     return {
         "token": f"student_{student.id}",
+        "school_id": school_id,
         "student": {
             "id": student.id,
             "student_id": student.student_id,

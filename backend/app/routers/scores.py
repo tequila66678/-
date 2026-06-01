@@ -5,7 +5,7 @@ from sqlalchemy import text
 from ..database import get_db
 from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat, Gender
 from ..schemas import ScoreBatchSave, ScoreWithChange, ClearAllRequest
-from ..auth import get_current_admin, get_current_admin_flexible, get_super_admin, verify_password
+from ..auth import get_current_admin, get_current_admin_flexible, get_super_admin, require_school, verify_password
 from ..scoring import calculate_score, normalize_time_ms, parse_value
 import openpyxl
 from io import BytesIO
@@ -14,6 +14,9 @@ from typing import Optional
 from collections import defaultdict
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
+
+def _get_admin_school(current: Admin) -> int:
+    return require_school(current)
 
 def _get_previous_score(db: Session, student_db_id: int, event_id: int, current_date: date) -> Optional[Score]:
     return (
@@ -33,18 +36,25 @@ def batch_save_scores(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
+    sid = _get_admin_school(current)
     results = []
     praise_threshold = 1
     warning_threshold = 2
-    praise_cfg = db.query(SystemConfig).filter(SystemConfig.key == "praise_threshold").first()
-    warning_cfg = db.query(SystemConfig).filter(SystemConfig.key == "warning_threshold").first()
+    praise_cfg = db.query(SystemConfig).filter(
+        SystemConfig.key == "praise_threshold", SystemConfig.school_id == sid
+    ).first()
+    warning_cfg = db.query(SystemConfig).filter(
+        SystemConfig.key == "warning_threshold", SystemConfig.school_id == sid
+    ).first()
     if praise_cfg:
         praise_threshold = int(praise_cfg.value)
     if warning_cfg:
         warning_threshold = int(warning_cfg.value)
 
     for entry in data.scores:
-        event = db.query(SportEvent).get(entry.event_id)
+        event = db.query(SportEvent).filter(
+            SportEvent.id == entry.event_id, SportEvent.school_id == sid
+        ).first()
         student = db.query(Student).get(entry.student_id)
         raw_value = entry.raw_value
         if event and event.input_format == InputFormat.time_ms:
@@ -83,7 +93,8 @@ def batch_save_scores(
                 raw_value=raw_value,
                 earned_score=earned,
                 test_date=entry.test_date,
-                recorder_id=current.id
+                recorder_id=current.id,
+                school_id=sid
             )
             db.add(score_obj)
 
@@ -123,7 +134,8 @@ def class_stats(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    cls = db.query(Class).get(class_id)
+    sid = _get_admin_school(current)
+    cls = db.query(Class).filter(Class.id == class_id, Class.school_id == sid).first()
     if not cls:
         raise HTTPException(404, "班级不存在")
 
@@ -142,7 +154,7 @@ def class_stats(
         if key not in latest:
             latest[key] = sc
 
-    events = db.query(SportEvent).all()
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).all()
     if event_id_list:
         events = [e for e in events if e.id in event_id_list]
 
@@ -204,7 +216,10 @@ def student_stats(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    s = db.query(Student).get(student_id)
+    sid = _get_admin_school(current)
+    s = db.query(Student).join(Class).filter(
+        Student.id == student_id, Class.school_id == sid
+    ).first()
     if not s:
         raise HTTPException(404, "学生不存在")
 
@@ -269,10 +284,13 @@ def export_class_scores(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    cls = db.query(Class).get(class_id)
+    sid = _get_admin_school(current)
+    cls = db.query(Class).filter(Class.id == class_id, Class.school_id == sid).first()
+    if not cls:
+        raise HTTPException(404, "班级不存在")
     students = db.query(Student).filter(Student.class_id == class_id).order_by(Student.student_id).all()
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
-    events_q = db.query(SportEvent)
+    events_q = db.query(SportEvent).filter(SportEvent.school_id == sid)
     if event_id_list:
         events_q = events_q.filter(SportEvent.id.in_(event_id_list))
     events = events_q.order_by(SportEvent.sort_order).all()
@@ -363,13 +381,14 @@ def school_stats(
     current: Admin = Depends(get_current_admin)
 ):
     """School-wide statistics."""
+    sid = _get_admin_school(current)
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
-    events = db.query(SportEvent).order_by(SportEvent.sort_order).all()
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).order_by(SportEvent.sort_order).all()
     if event_id_list:
         events = [e for e in events if e.id in event_id_list]
 
-    all_students = db.query(Student).all()
-    all_scores = db.query(Score).order_by(Score.test_date.desc()).all()
+    all_students = db.query(Student).join(Class).filter(Class.school_id == sid).all()
+    all_scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
 
     # Latest per student per event
     latest = {}
@@ -398,7 +417,7 @@ def school_stats(
     excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
     pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
 
-    classes = db.query(Class).order_by(Class.grade, Class.name).all()
+    classes = db.query(Class).filter(Class.school_id == sid).order_by(Class.grade, Class.name).all()
     class_summaries = []
     for cls in classes:
         cls_students = [s for s in all_students if s.class_id == cls.id]
@@ -455,10 +474,11 @@ def export_preview(
     current: Admin = Depends(get_current_admin)
 ):
     """Preview export data before downloading."""
+    sid = _get_admin_school(current)
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
 
-    # Build query
-    q = db.query(Score)
+    # Build query - always scoped to school
+    q = db.query(Score).filter(Score.school_id == sid)
     if scope == "class" and class_id:
         students_in_class = db.query(Student).filter(Student.class_id == class_id).all()
         q = q.filter(Score.student_id.in_([s.id for s in students_in_class]))
@@ -472,7 +492,7 @@ def export_preview(
         q = q.filter(Score.test_date <= date.fromisoformat(date_to))
 
     all_scores = q.order_by(Score.test_date.desc(), Score.student_id).all()
-    events = db.query(SportEvent).all()
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).all()
     event_map = {e.id: e for e in events}
 
     if mode == "best":
@@ -533,15 +553,16 @@ def export_download(
     current: Admin = Depends(get_current_admin_flexible)
 ):
     """Download export file (xlsx or txt)."""
+    sid = _get_admin_school(current)
     try:
-        return _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, db)
+        return _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, sid, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
-def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, db):
+def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, sid, db):
     # Reuse preview logic
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
-    q = db.query(Score)
+    q = db.query(Score).filter(Score.school_id == sid)
     if scope == "class" and class_id:
         students_in_class = db.query(Student).filter(Student.class_id == class_id).all()
         q = q.filter(Score.student_id.in_([s.id for s in students_in_class]))
@@ -555,7 +576,7 @@ def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_
         q = q.filter(Score.test_date <= date.fromisoformat(date_to))
 
     all_scores = q.order_by(Score.test_date.desc(), Score.student_id).all()
-    events = db.query(SportEvent).all()
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).all()
     event_map = {e.id: e for e in events}
 
     if mode == "best":
@@ -630,9 +651,15 @@ def get_class_students(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
+    sid = _get_admin_school(current)
+    cls = db.query(Class).filter(Class.id == class_id, Class.school_id == sid).first()
+    if not cls:
+        raise HTTPException(404, "班级不存在")
     q = db.query(Student).filter(Student.class_id == class_id)
     if event_id:
-        event = db.query(SportEvent).get(event_id)
+        event = db.query(SportEvent).filter(
+            SportEvent.id == event_id, SportEvent.school_id == sid
+        ).first()
         if event and event.gender.value != "both":
             q = q.filter(Student.gender == event.gender)
     students = q.order_by(Student.student_id).all()
@@ -640,58 +667,61 @@ def get_class_students(
 
 @router.get("/backup-all")
 def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin_flexible)):
-    """Backup all data as Excel (7 sheets)."""
+    """Backup current school data as Excel (7 sheets)."""
+    sid = _get_admin_school(current)
     wb = openpyxl.Workbook()
 
     # Sheet 1: Classes
     ws1 = wb.active
     ws1.title = "班级信息"
-    ws1.append(["ID", "年级", "班级名"])
-    classes = db.query(Class).order_by(Class.grade, Class.name).all()
+    ws1.append(["ID", "年级", "班级名", "学校ID"])
+    classes = db.query(Class).filter(Class.school_id == sid).order_by(Class.grade, Class.name).all()
     for c in classes:
-        ws1.append([c.id, c.grade, c.name])
+        ws1.append([c.id, c.grade, c.name, c.school_id])
 
     # Sheet 2: Sport Events
     ws2 = wb.create_sheet("体育项目")
-    ws2.append(["ID", "名称", "性别", "越大越好", "单位", "输入格式", "排序"])
-    events = db.query(SportEvent).order_by(SportEvent.sort_order).all()
+    ws2.append(["ID", "名称", "性别", "越大越好", "单位", "输入格式", "排序", "学校ID"])
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).order_by(SportEvent.sort_order).all()
     for e in events:
-        ws2.append([e.id, e.name, e.gender.value if e.gender else "both", e.higher_better, e.unit, e.input_format.value if e.input_format else "decimal_seconds", e.sort_order])
+        ws2.append([e.id, e.name, e.gender.value if e.gender else "both", e.higher_better, e.unit, e.input_format.value if e.input_format else "decimal_seconds", e.sort_order, e.school_id])
 
     # Sheet 3: Scoring Standards
     ws3 = wb.create_sheet("评分标准")
     ws3.append(["ID", "项目ID", "性别", "分数", "标准值"])
-    standards = db.query(ScoringStandard).order_by(ScoringStandard.event_id, ScoringStandard.score.desc()).all()
+    event_ids = [e.id for e in events]
+    standards = db.query(ScoringStandard).filter(ScoringStandard.event_id.in_(event_ids)).order_by(ScoringStandard.event_id, ScoringStandard.score.desc()).all() if event_ids else []
     for std in standards:
         ws3.append([std.id, std.event_id, std.gender.value if std.gender else "both", std.score, std.standard_value])
 
     # Sheet 4: Students
     ws4 = wb.create_sheet("学生信息")
     ws4.append(["ID", "学号", "姓名", "性别", "班级ID", "密码哈希"])
-    students = db.query(Student).order_by(Student.student_id).all()
+    class_ids = [c.id for c in classes]
+    students = db.query(Student).filter(Student.class_id.in_(class_ids)).order_by(Student.student_id).all() if class_ids else []
     for s in students:
         ws4.append([s.id, s.student_id, s.name, s.gender.value if s.gender else "M", s.class_id, s.password_hash])
 
     # Sheet 5: Scores
     ws5 = wb.create_sheet("成绩记录")
-    ws5.append(["ID", "学生ID", "项目ID", "成绩", "得分", "测试日期", "录入人ID"])
-    scores = db.query(Score).order_by(Score.test_date.desc()).all()
+    ws5.append(["ID", "学生ID", "项目ID", "成绩", "得分", "测试日期", "录入人ID", "学校ID"])
+    scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
     for sc in scores:
-        ws5.append([sc.id, sc.student_id, sc.event_id, sc.raw_value, sc.earned_score, sc.test_date.isoformat(), sc.recorder_id or ""])
+        ws5.append([sc.id, sc.student_id, sc.event_id, sc.raw_value, sc.earned_score, sc.test_date.isoformat(), sc.recorder_id or "", sc.school_id])
 
     # Sheet 6: Admins
     ws6 = wb.create_sheet("管理员")
-    ws6.append(["ID", "用户名", "密码哈希", "超管", "显示名"])
-    admins = db.query(Admin).order_by(Admin.id).all()
+    ws6.append(["ID", "用户名", "密码哈希", "超管", "显示名", "学校ID"])
+    admins = db.query(Admin).filter((Admin.school_id == sid) | (Admin.is_super == True)).order_by(Admin.id).all()
     for a in admins:
-        ws6.append([a.id, a.username, a.password_hash, a.is_super, a.display_name])
+        ws6.append([a.id, a.username, a.password_hash, a.is_super, a.display_name, a.school_id or ""])
 
     # Sheet 7: System Config
     ws7 = wb.create_sheet("系统设置")
-    ws7.append(["键", "值"])
-    configs = db.query(SystemConfig).all()
+    ws7.append(["键", "值", "学校ID"])
+    configs = db.query(SystemConfig).filter(SystemConfig.school_id == sid).all()
     for cfg in configs:
-        ws7.append([cfg.key, cfg.value])
+        ws7.append([cfg.key, cfg.value, cfg.school_id])
 
     buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -703,7 +733,8 @@ def restore_all_data(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    """Restore all data from backup Excel file."""
+    """Restore current school data from backup Excel file."""
+    sid = _get_admin_school(current)
     try:
         wb = openpyxl.load_workbook(file.file, data_only=True)
     except Exception:
@@ -715,7 +746,7 @@ def restore_all_data(
         return []
 
     # Read all sheets
-    classes_data = [{"id": int(r[0]), "grade": str(r[1]), "name": str(r[2])} for r in get_sheet("班级信息") if r[0] is not None]
+    classes_data = [{"id": int(r[0]), "grade": str(r[1]), "name": str(r[2]), "school_id": int(r[3]) if len(r) > 3 and r[3] else sid} for r in get_sheet("班级信息") if r[0] is not None]
     events_data = []
     for r in get_sheet("体育项目"):
         if r[0] is not None:
@@ -723,7 +754,7 @@ def restore_all_data(
                 "id": int(r[0]), "name": str(r[1]), "gender": Gender(str(r[2])) if r[2] else Gender.both,
                 "higher_better": r[3] in (True, "True", "true", 1, "1"),
                 "unit": str(r[4]), "input_format": InputFormat(str(r[5])) if r[5] else InputFormat.decimal_seconds,
-                "sort_order": int(r[6] or 0)
+                "sort_order": int(r[6] or 0), "school_id": int(r[7]) if len(r) > 7 and r[7] else sid
             })
     standards_data = []
     for r in get_sheet("评分标准"):
@@ -748,20 +779,38 @@ def restore_all_data(
                 "id": int(r[0]), "student_id": int(r[1]), "event_id": int(r[2]),
                 "raw_value": str(r[3]), "earned_score": int(r[4]),
                 "test_date": date.fromisoformat(str(r[5])) if r[5] else date.today(),
-                "recorder_id": int(r[6]) if r[6] and str(r[6]).strip() else None
+                "recorder_id": int(r[6]) if r[6] and str(r[6]).strip() else None,
+                "school_id": int(r[7]) if len(r) > 7 and r[7] else sid
             })
-    admins_data = [{"id": int(r[0]), "username": str(r[1]), "password_hash": str(r[2]), "is_super": r[3] in (True, "True", "true", 1, "1"), "display_name": str(r[4])} for r in get_sheet("管理员") if r[0] is not None]
-    configs_data = [{"key": str(r[0]), "value": str(r[1])} for r in get_sheet("系统设置") if r[0] is not None]
+    admins_data = []
+    for r in get_sheet("管理员"):
+        if r[0] is not None:
+            admins_data.append({
+                "id": int(r[0]), "username": str(r[1]), "password_hash": str(r[2]),
+                "is_super": r[3] in (True, "True", "true", 1, "1"), "display_name": str(r[4]),
+                "school_id": int(r[5]) if len(r) > 5 and r[5] else None
+            })
+    configs_data = []
+    for r in get_sheet("系统设置"):
+        if r[0] is not None:
+            configs_data.append({
+                "key": str(r[0]), "value": str(r[1]),
+                "school_id": int(r[2]) if len(r) > 2 and r[2] else sid
+            })
 
     try:
-        # Delete in reverse dependency order
-        db.query(Score).delete()
-        db.query(ScoringStandard).delete()
-        db.query(Student).delete()
-        db.query(SportEvent).delete()
-        db.query(Class).delete()
-        db.query(Admin).delete()
-        db.query(SystemConfig).delete()
+        # Delete current school's data in reverse dependency order
+        db.query(Score).filter(Score.school_id == sid).delete(synchronize_session=False)
+        db.query(ScoringStandard).filter(ScoringStandard.event_id.in_(
+            db.query(SportEvent.id).filter(SportEvent.school_id == sid)
+        )).delete(synchronize_session=False)
+        db.query(Student).filter(Student.class_id.in_(
+            db.query(Class.id).filter(Class.school_id == sid)
+        )).delete(synchronize_session=False)
+        db.query(SportEvent).filter(SportEvent.school_id == sid).delete(synchronize_session=False)
+        db.query(Class).filter(Class.school_id == sid).delete(synchronize_session=False)
+        db.query(Admin).filter(Admin.school_id == sid).delete(synchronize_session=False)
+        db.query(SystemConfig).filter(SystemConfig.school_id == sid).delete(synchronize_session=False)
         db.flush()
 
         # Insert in dependency order
@@ -798,10 +847,11 @@ def clear_all_scores(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_super_admin)
 ):
-    """Delete all score records (super admin only, password required)."""
+    """Delete all score records for current school (super admin only, password required)."""
     if not verify_password(data.password, current.password_hash):
         raise HTTPException(403, "密码错误")
-    count = db.query(Score).count()
-    db.query(Score).delete()
+    sid = _get_admin_school(current)
+    count = db.query(Score).filter(Score.school_id == sid).count()
+    db.query(Score).filter(Score.school_id == sid).delete(synchronize_session=False)
     db.commit()
     return {"ok": True, "deleted": count}

@@ -13,6 +13,8 @@ class AdminOut(BaseModel):
     username: str
     display_name: str
     is_super: bool
+    school_id: Optional[int] = None
+    school_name: Optional[str] = None
     model_config = {"from_attributes": True}
 
 class TokenOut(BaseModel):
@@ -145,6 +147,7 @@ class AdminCreate(BaseModel):
     password: str
     display_name: str
     is_super: bool = False
+    school_id: Optional[int] = None
 
 class AdminUpdate(BaseModel):
     display_name: Optional[str] = None
@@ -167,3 +170,15 @@ class StudentLogin(BaseModel):
 class StudentPasswordChange(BaseModel):
     old_password: str
     new_password: str
+
+# School
+class SchoolOut(BaseModel):
+    id: int
+    name: str
+    model_config = {"from_attributes": True}
+
+class SchoolCreate(BaseModel):
+    name: str
+
+class SwitchSchoolRequest(BaseModel):
+    school_id: int

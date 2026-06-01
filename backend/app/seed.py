@@ -1,6 +1,6 @@
 """Seed default data: admin account, sport events with gender-separated scoring standards, config."""
 from .database import SessionLocal
-from .models import Admin, SportEvent, ScoringStandard, SystemConfig, Gender, InputFormat
+from .models import Admin, School, SportEvent, ScoringStandard, SystemConfig, Gender, InputFormat
 from .auth import hash_password
 
 # Female standards (score 10 down to 1)
@@ -44,24 +44,8 @@ EVENT_META = {
     "游泳": (Gender.both, True, "米", InputFormat.integer, 9),
 }
 
-def seed():
-    db = SessionLocal()
-
-    if db.query(Admin).first():
-        print("Already seeded, skipping.")
-        db.close()
-        return
-
-    # Default admin
-    admin = Admin(
-        username="admin",
-        password_hash=hash_password("admin123"),
-        is_super=True,
-        display_name="超级管理员"
-    )
-    db.add(admin)
-
-    # Sport events with gender-separated standards
+def seed_school(db, school_id: int):
+    """Seed events, standards, and config for a specific school."""
     for name, (gender, higher_better, unit, input_fmt, sort_order) in EVENT_META.items():
         event = SportEvent(
             name=name,
@@ -69,12 +53,12 @@ def seed():
             higher_better=higher_better,
             unit=unit,
             input_format=input_fmt,
-            sort_order=sort_order
+            sort_order=sort_order,
+            school_id=school_id
         )
         db.add(event)
         db.flush()
 
-        # Add female standards if this event applies to females
         if gender in (Gender.F, Gender.both) and name in FEMALE_STANDARDS:
             for i, val in enumerate(FEMALE_STANDARDS[name]):
                 db.add(ScoringStandard(
@@ -82,7 +66,6 @@ def seed():
                     score=10 - i, standard_value=val
                 ))
 
-        # Add male standards if this event applies to males
         if gender in (Gender.M, Gender.both) and name in MALE_STANDARDS:
             for i, val in enumerate(MALE_STANDARDS[name]):
                 db.add(ScoringStandard(
@@ -90,15 +73,39 @@ def seed():
                     score=10 - i, standard_value=val
                 ))
 
-    # System config
     configs = [
-        SystemConfig(key="school_name", value="江东中心学校体育成绩管理中心"),
-        SystemConfig(key="praise_threshold", value="1"),
-        SystemConfig(key="warning_threshold", value="2"),
-        SystemConfig(key="designer", value="tequila"),
+        SystemConfig(key="school_name", value="体育成绩管理中心", school_id=school_id),
+        SystemConfig(key="praise_threshold", value="1", school_id=school_id),
+        SystemConfig(key="warning_threshold", value="2", school_id=school_id),
+        SystemConfig(key="designer", value="tequila", school_id=school_id),
     ]
     for c in configs:
         db.add(c)
+
+def seed():
+    """First-deploy seed: create default school, super-admin, events, config."""
+    db = SessionLocal()
+
+    if db.query(Admin).first():
+        print("Already seeded, skipping.")
+        db.close()
+        return
+
+    school = School(name="江东中心学校")
+    db.add(school)
+    db.flush()
+
+    seed_school(db, school.id)
+
+    # Default super-admin (school_id=None = platform-level)
+    admin = Admin(
+        username="admin",
+        password_hash=hash_password("admin123"),
+        is_super=True,
+        display_name="超级管理员",
+        school_id=None
+    )
+    db.add(admin)
 
     db.commit()
     db.close()
