@@ -24,7 +24,10 @@ def list_students(
     current: Admin = Depends(get_current_admin)
 ):
     sid = require_school(current)
-    q = _school_students(db, sid)
+    if sid is not None:
+        q = _school_students(db, sid)
+    else:
+        q = db.query(Student)
     if search:
         q = q.filter(
             (Student.student_id.contains(search)) | (Student.name.contains(search))
@@ -45,9 +48,12 @@ def list_students(
 @router.post("", response_model=StudentOut)
 def create_student(data: StudentCreate, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
     sid = require_school(current)
-    cls = db.query(Class).filter(Class.id == data.class_id, Class.school_id == sid).first()
+    q = db.query(Class).filter(Class.id == data.class_id)
+    if sid is not None:
+        q = q.filter(Class.school_id == sid)
+    cls = q.first()
     if not cls:
-        raise HTTPException(status_code=400, detail="班级不属于当前学校")
+        raise HTTPException(status_code=400, detail="班级不存在或不属于当前学校")
     existing = db.query(Student).filter(Student.student_id == data.student_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="学号已存在")
@@ -66,7 +72,10 @@ def create_student(data: StudentCreate, db: Session = Depends(get_db), current: 
 @router.get("/{student_id}", response_model=StudentOut)
 def get_student(student_id: int, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
     sid = require_school(current)
-    s = _school_students(db, sid).filter(Student.id == student_id).first()
+    if sid is not None:
+        s = _school_students(db, sid).filter(Student.id == student_id).first()
+    else:
+        s = db.query(Student).filter(Student.id == student_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
     out = StudentOut.model_validate(s)
@@ -78,7 +87,10 @@ def get_student(student_id: int, db: Session = Depends(get_db), current: Admin =
 @router.put("/{student_id}", response_model=StudentOut)
 def update_student(student_id: int, data: StudentCreate, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
     sid = require_school(current)
-    s = _school_students(db, sid).filter(Student.id == student_id).first()
+    if sid is not None:
+        s = _school_students(db, sid).filter(Student.id == student_id).first()
+    else:
+        s = db.query(Student).filter(Student.id == student_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
     s.student_id = data.student_id
@@ -92,7 +104,10 @@ def update_student(student_id: int, data: StudentCreate, db: Session = Depends(g
 @router.delete("/{student_id}")
 def delete_student(student_id: int, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
     sid = require_school(current)
-    s = _school_students(db, sid).filter(Student.id == student_id).first()
+    if sid is not None:
+        s = _school_students(db, sid).filter(Student.id == student_id).first()
+    else:
+        s = db.query(Student).filter(Student.id == student_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="学生不存在")
     db.query(Score).filter(Score.student_id == student_id).delete()
@@ -123,10 +138,14 @@ def batch_import(file: UploadFile = File(...), db: Session = Depends(get_db), cu
         else:
             grade = class_str
             class_name = ""
-        cls = db.query(Class).filter(
-            Class.grade == grade, Class.name == class_name, Class.school_id == sid
-        ).first()
+        q = db.query(Class).filter(Class.grade == grade, Class.name == class_name)
+        if sid is not None:
+            q = q.filter(Class.school_id == sid)
+        cls = q.first()
         if not cls:
+            if sid is None:
+                errors.append(f"行{row_idx}: 超管导入需指定现有班级（无法自动创建跨学校班级）")
+                continue
             cls = Class(grade=grade, name=class_name, school_id=sid)
             db.add(cls)
             db.flush()
@@ -149,7 +168,10 @@ def batch_import(file: UploadFile = File(...), db: Session = Depends(get_db), cu
 @router.put("/batch/update")
 def batch_update(data: StudentBatchUpdate, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
     sid = require_school(current)
-    q = _school_students(db, sid)
+    if sid is not None:
+        q = _school_students(db, sid)
+    else:
+        q = db.query(Student)
     if data.class_id:
         q = q.filter(Student.class_id == data.class_id)
     students = q.all()

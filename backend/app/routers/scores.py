@@ -15,8 +15,14 @@ from collections import defaultdict
 
 router = APIRouter(prefix="/api/scores", tags=["scores"])
 
-def _get_admin_school(current: Admin) -> int:
+def _get_admin_school(current: Admin) -> Optional[int]:
     return require_school(current)
+
+def _maybe_filter(query, model, sid):
+    """Apply school filter only if sid is not None (super-admin sees all)."""
+    if sid is not None:
+        return query.filter(model.school_id == sid)
+    return query
 
 def _get_previous_score(db: Session, student_db_id: int, event_id: int, current_date: date) -> Optional[Score]:
     return (
@@ -37,14 +43,16 @@ def batch_save_scores(
     current: Admin = Depends(get_current_admin)
 ):
     sid = _get_admin_school(current)
+    if sid is None:
+        raise HTTPException(status_code=400, detail="请先选择学校再进行成绩录入")
     results = []
     praise_threshold = 1
     warning_threshold = 2
-    praise_cfg = db.query(SystemConfig).filter(
-        SystemConfig.key == "praise_threshold", SystemConfig.school_id == sid
+    praise_cfg = _maybe_filter(db.query(SystemConfig), SystemConfig, sid).filter(
+        SystemConfig.key == "praise_threshold"
     ).first()
-    warning_cfg = db.query(SystemConfig).filter(
-        SystemConfig.key == "warning_threshold", SystemConfig.school_id == sid
+    warning_cfg = _maybe_filter(db.query(SystemConfig), SystemConfig, sid).filter(
+        SystemConfig.key == "warning_threshold"
     ).first()
     if praise_cfg:
         praise_threshold = int(praise_cfg.value)
@@ -52,8 +60,9 @@ def batch_save_scores(
         warning_threshold = int(warning_cfg.value)
 
     for entry in data.scores:
-        event = db.query(SportEvent).filter(
-            SportEvent.id == entry.event_id, SportEvent.school_id == sid
+        event = _maybe_filter(
+            db.query(SportEvent).filter(SportEvent.id == entry.event_id),
+            SportEvent, sid
         ).first()
         student = db.query(Student).get(entry.student_id)
         raw_value = entry.raw_value
@@ -478,7 +487,7 @@ def export_preview(
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
 
     # Build query - always scoped to school
-    q = db.query(Score).filter(Score.school_id == sid)
+    q = _maybe_filter(db.query(Score), Score, sid)
     if scope == "class" and class_id:
         students_in_class = db.query(Student).filter(Student.class_id == class_id).all()
         q = q.filter(Score.student_id.in_([s.id for s in students_in_class]))
@@ -562,7 +571,7 @@ def export_download(
 def _do_export_download(scope, class_id, student_id, event_ids, date_from, date_to, mode, format, sid, db):
     # Reuse preview logic
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
-    q = db.query(Score).filter(Score.school_id == sid)
+    q = _maybe_filter(db.query(Score), Score, sid)
     if scope == "class" and class_id:
         students_in_class = db.query(Student).filter(Student.class_id == class_id).all()
         q = q.filter(Score.student_id.in_([s.id for s in students_in_class]))
@@ -851,7 +860,7 @@ def clear_all_scores(
     if not verify_password(data.password, current.password_hash):
         raise HTTPException(403, "密码错误")
     sid = _get_admin_school(current)
-    count = db.query(Score).filter(Score.school_id == sid).count()
-    db.query(Score).filter(Score.school_id == sid).delete(synchronize_session=False)
+    count = _maybe_filter(db.query(Score), Score, sid).count()
+    _maybe_filter(db.query(Score), Score, sid).delete(synchronize_session=False)
     db.commit()
     return {"ok": True, "deleted": count}

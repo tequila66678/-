@@ -60,11 +60,14 @@ def get_school_id(
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的登录凭证")
 
-def require_school(current: Admin = Depends(get_current_admin)) -> int:
+def require_school(current: Admin = Depends(get_current_admin)) -> Optional[int]:
+    """Get current admin's school_id for filtering.
+    Super-admin with no school → None (see all schools).
+    Regular admin with no school → error."""
     sid = getattr(current, "current_school_id", None)
-    if sid is None:
+    if sid is None and not current.is_super:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择学校")
-    return sid
+    return sid  # None for super-admin = see all schools
 
 def get_current_admin_flexible(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_bearer),

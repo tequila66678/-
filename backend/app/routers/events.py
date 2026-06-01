@@ -11,7 +11,9 @@ from ..auth import get_super_admin, get_current_admin, require_school
 router = APIRouter(prefix="/api/events", tags=["events"])
 
 def _school_filter(q, school_id):
-    return q.filter(SportEvent.school_id == school_id)
+    if school_id is not None:
+        return q.filter(SportEvent.school_id == school_id)
+    return q
 
 @router.get("", response_model=list[SportEventOut])
 def list_events(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
