@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>长跑计时 · 成绩导出</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  min-height: 100dvh;
+  padding: min(5vw, 20px);
+  display: flex; flex-direction: column; gap: 16px;
+}
+.header {
+  text-align: center;
+  padding: 16px 0 8px;
+}
+.header h1 { font-size: 1.4rem; color: #f8fafc; }
+.header p  { font-size: 0.85rem; color: #94a3b8; margin-top:4px; }
+
+.card {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.card-title {
+  font-size: 1rem; font-weight: 600;
+  color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;
+}
+
+.btn {
+  display: block; width: 100%;
+  padding: 16px; border: none; border-radius: 12px;
+  font-size: 1.05rem; font-weight: 600; cursor: pointer;
+  transition: 0.2s; text-align: center;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; pointer-events: none; }
+
+.btn-primary  { background: #3b82f6; color: white; }
+.btn-success  { background: #10b981; color: white; }
+.btn-warning  { background: #f59e0b; color: #1e293b; }
+.btn-danger   { background: #ef4444; color: white; }
+.btn-ghost    { background: #334155; color: #e2e8f0; }
+
+.status {
+  padding: 12px 16px; border-radius: 10px;
+  font-size: 0.9rem; text-align: center;
+}
+.status-info  { background: #1e3a5f; color: #93c5fd; }
+.status-ok    { background: #064e3b; color: #6ee7b7; }
+.status-err   { background: #450a0a; color: #fca5a5; }
+
+table {
+  width: 100%; border-collapse: collapse; font-size: 0.88rem;
+}
+th, td { padding: 10px 8px; text-align: center; }
+th { color: #94a3b8; font-weight: 500; border-bottom: 2px solid #334155; }
+td { border-bottom: 1px solid #1e293b; }
+tr.finished td { background: #064e3b; }
+.finish-badge { color: #10b981; font-weight: 700; }
+
+.hidden { display: none !important; }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>长跑计时系统</h1>
+  <p>E6-RCU 成绩导出 · 上传云端</p>
+</div>
+
+<!-- Step 1: Connect -->
+<div class="card" id="step1">
+  <div class="card-title">Step 1 · 连接设备</div>
+  <button class="btn btn-primary" onclick="connect()" id="btnConnect">
+    连接 E6-RCU
+  </button>
+  <div class="status status-info hidden" id="statusPort"></div>
+</div>
+
+<!-- Step 2: Read -->
+<div class="card hidden" id="step2">
+  <div class="card-title">Step 2 · 读取成绩</div>
+  <button class="btn btn-warning" onclick="readResults()" id="btnRead">
+    从 E6-RCU 读取成绩
+  </button>
+  <div class="status status-info hidden" id="statusRead"></div>
+</div>
+
+<!-- Results table -->
+<div class="card hidden" id="step3">
+  <div class="card-title">Step 3 · 成绩列表</div>
+  <div style="overflow-x:auto;">
+    <table id="tblResults">
+      <thead><tr>
+        <th>号码布</th><th>姓名</th><th>项目</th><th>成绩</th><th>圈数</th>
+      </tr></thead>
+      <tbody id="tblBody"></tbody>
+    </table>
+  </div>
+  <div class="status status-info hidden" id="statusUpload"></div>
+</div>
+
+<!-- Step 4: Upload -->
+<div class="card hidden" id="step4">
+  <div class="card-title">Step 4 · 上传云端</div>
+  <button class="btn btn-success" onclick="uploadCloud()" id="btnUpload">
+    上传到 sports-dhju.onrender.com
+  </button>
+  <div class="status status-ok hidden" id="statusDone"></div>
+</div>
+
+<script>
+// ─── Global state ───
+let port = null;
+let writer = null;
+let reader = null;
+let allRecords = [];
+let finishedRecords = [];
+let deviceInfo = '';
+
+// ─── Web Serial ───
+async function connect() {
+  const btn = document.getElementById('btnConnect');
+  const status = document.getElementById('statusPort');
+  btn.disabled = true;
+  btn.textContent = '连接中...';
+  status.classList.add('hidden');
+
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+
+    writer = port.writable.getWriter();
+    reader = port.readable.getReader();
+
+    // Drain any buffered data
+    await drain(500);
+    // Send Ctrl-C to interrupt
+    await sendRaw('\r\x03\x03');
+    await sleep(400);
+    await drain(500);
+    // Enter raw REPL
+    await sendRaw('\r\x01');
+    await sleep(400);
+    await drain(300);
+
+    status.textContent = 'E6-RCU 已连接';
+    status.className = 'status status-ok';
+    status.classList.remove('hidden');
+    btn.textContent = '已连接';
+
+    document.getElementById('step2').classList.remove('hidden');
+  } catch (err) {
+    status.textContent = '连接失败: ' + err.message;
+    status.className = 'status status-err';
+    status.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = '重试连接';
+    port = null;
+  }
+}
+
+async function sendRaw(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  await writer.write(data);
+}
+
+async function drain(ms) {
+  try {
+    const timeout = setTimeout(() => { throw new Error('timeout'); }, ms || 500);
+    let data = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      data += new TextDecoder().decode(value);
+    }
+  } catch (e) {
+    // timeout or drain complete
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── Read results ───
+async function readResults() {
+  const btn = document.getElementById('btnRead');
+  const status = document.getElementById('statusRead');
+  btn.disabled = true;
+  btn.textContent = '读取中...';
+  status.classList.add('hidden');
+
+  if (!port) {
+    status.textContent = '请先连接 E6-RCU';
+    status.className = 'status status-err';
+    status.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = '重试';
+    return;
+  }
+
+  try {
+    // Raw REPL: send code to read results.txt
+    const code = (
+      "try:\r\n" +
+      " f=open('results.txt','r')\r\n" +
+      " print(f.read())\r\n" +
+      " f.close()\r\n" +
+      "except Exception as e:\r\n" +
+      " print('ERR:'+str(e))\r\n" +
+      "print('--EOF--')\r\n"
+    );
+
+    await sendRaw(code);
+    await sleep(300);
+    await sendRaw('\x04');  // Ctrl-D to execute
+    await sleep(4000);
+
+    // Read response
+    let rawOutput = '';
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) break;
+        rawOutput += new TextDecoder().decode(value);
+        if (rawOutput.includes('--EOF--')) break;
+      } catch (e) {
+        break;
+      }
+    }
+
+    // Clean up
+    await sendRaw('\r\x03');
+    await sleep(200);
+
+    // Parse
+    parseOutput(rawOutput);
+
+    if (allRecords.length === 0) {
+      status.textContent = '未找到成绩记录（results.txt 为空）';
+      status.className = 'status status-err';
+    } else {
+      status.textContent = `读取成功！共 ${allRecords.length} 条记录，其中 ${finishedRecords.length} 人完赛`;
+      status.className = 'status status-ok';
+
+      // Show table
+      renderTable();
+      document.getElementById('step3').classList.remove('hidden');
+
+      if (finishedRecords.length > 0) {
+        document.getElementById('step4').classList.remove('hidden');
+      }
+    }
+    status.classList.remove('hidden');
+    btn.textContent = '重新读取';
+  } catch (err) {
+    status.textContent = '读取失败: ' + err.message;
+    status.className = 'status status-err';
+    status.classList.remove('hidden');
+  }
+  btn.disabled = false;
+}
+
+function parseOutput(raw) {
+  allRecords = [];
+  finishedRecords = [];
+
+  const lines = raw.replace(/\x04/g, '').replace(/OK/g, '').replace(/>/g, '').split(/[\r\n]+/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === '--EOF--' || trimmed.startsWith('ERR')) continue;
+    if (!trimmed.includes(',')) continue;
+
+    const parts = trimmed.split(',');
+    if (parts.length < 6) continue;
+
+    const [fid, bib, proj, dist, elapsedMs, lap] = parts;
+    const elapsedS = parseInt(elapsedMs) / 1000.0;
+    const min = Math.floor(elapsedS / 60);
+    const sec = Math.floor(elapsedS % 60);
+    const ds = Math.floor((elapsedS % 1) * 10);
+    const timeStr = min + "'" + String(sec).padStart(2, '0') + '"' + ds;
+
+    let lapN = 0, lapTotal = 0;
+    const lapMatch = lap.match(/LAP(\d+)\/(\d+)/);
+    if (lapMatch) {
+      lapN = parseInt(lapMatch[1]);
+      lapTotal = parseInt(lapMatch[2]);
+    }
+
+    const rec = {
+      fid, bib, proj, dist: parseInt(dist),
+      elapsedMs: parseInt(elapsedMs),
+      elapsedS, timeStr, lap, lapN, lapTotal,
+      finished: lapN >= lapTotal
+    };
+    allRecords.push(rec);
+    if (rec.finished) finishedRecords.push(rec);
+  }
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tblBody');
+  tbody.innerHTML = '';
+
+  for (const r of allRecords) {
+    const tr = document.createElement('tr');
+    if (r.finished) tr.className = 'finished';
+
+    const badge = r.finished ? ' <span class="finish-badge">DONE</span>' :
+      ' <span style="color:#94a3b8">' + r.lap + '</span>';
+
+    tr.innerHTML = `
+      <td class="mono">${esc(r.bib)}</td>
+      <td>--</td>
+      <td>${esc(r.proj)}</td>
+      <td class="mono">${r.timeStr}</td>
+      <td>${badge}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ─── Upload to cloud ───
+async function uploadCloud() {
+  const btn = document.getElementById('btnUpload');
+  const status = document.getElementById('statusUpload');
+  const statusDone = document.getElementById('statusDone');
+  btn.disabled = true;
+  btn.textContent = '上传中...';
+  status.classList.add('hidden');
+  statusDone.classList.add('hidden');
+
+  const BACKEND = 'https://sports-dhju.onrender.com';
+  const ADMIN_USER = 'admin';
+  const ADMIN_PASS = 'admin123';
+
+  try {
+    // Login
+    status.textContent = '登录云端...';
+    status.className = 'status status-info';
+    status.classList.remove('hidden');
+
+    const loginResp = await fetch(BACKEND + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS })
+    });
+    if (!loginResp.ok) throw new Error('登录失败: ' + loginResp.status);
+    const loginData = await loginResp.json();
+    const token = loginData.access_token;
+
+    // Get events
+    status.textContent = '获取项目列表...';
+    const evtsResp = await fetch(BACKEND + '/api/events', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const events = await evtsResp.json();
+    const eventMap = {};
+    for (const e of events) {
+      eventMap[e.name] = e.id;
+      // Aliases
+      if (e.name.includes('米')) {
+        const short = e.name.replace('跑', '');
+        eventMap[short] = e.id;
+      }
+    }
+
+    // Build scores payload
+    const scores = [];
+    const skipped = [];
+
+    for (const r of finishedRecords) {
+      // Search student
+      const stuResp = await fetch(BACKEND + '/api/students?search=' + r.bib + '&page_size=5', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      let studentId = null;
+      let studentName = '?';
+      if (stuResp.ok) {
+        const students = await stuResp.json();
+        for (const s of students) {
+          if (s.student_id.endsWith(r.bib)) {
+            studentId = s.id;
+            studentName = s.name;
+            break;
+          }
+        }
+      }
+
+      const eventId = eventMap[r.proj] || null;
+
+      if (!studentId || !eventId) {
+        skipped.push(r.bib + ' (' + r.proj + ')');
+        continue;
+      }
+
+      const totalSec = r.elapsedMs / 1000.0;
+      const mm = Math.floor(totalSec / 60);
+      const ss = Math.floor(totalSec % 60);
+      const rawValue = mm + "'" + String(ss).padStart(2, '0');
+
+      scores.push({
+        student_id: studentId,
+        event_id: eventId,
+        raw_value: rawValue,
+        test_date: new Date().toISOString().split('T')[0]
+      });
+    }
+
+    if (scores.length === 0) {
+      throw new Error('没有可推送的成绩 (student/event 映射失败: ' + skipped.join(', ') + ')');
+    }
+
+    // Push
+    status.textContent = `推送 ${scores.length} 条成绩...`;
+    const pushResp = await fetch(BACKEND + '/api/scores/batch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ scores: scores })
+    });
+
+    if (!pushResp.ok) {
+      const errText = await pushResp.text();
+      throw new Error('推送失败: ' + pushResp.status + ' ' + errText.slice(0, 200));
+    }
+
+    const pushResult = await pushResp.json();
+    status.classList.add('hidden');
+    statusDone.textContent = `上传成功！${pushResult.length} 条成绩已推送到云端。${skipped.length ? ' 跳过: ' + skipped.join(', ') : ''}`;
+    statusDone.className = 'status status-ok';
+    statusDone.classList.remove('hidden');
+    btn.textContent = '已上传';
+
+  } catch (err) {
+    status.textContent = '错误: ' + err.message;
+    status.className = 'status status-err';
+    status.classList.remove('hidden');
+  }
+  btn.disabled = false;
+}
+</script>
+</body>
+</html>
