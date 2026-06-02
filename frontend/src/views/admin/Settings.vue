@@ -79,6 +79,33 @@
         </el-dialog>
       </el-tab-pane>
 
+      <el-tab-pane label="学校管理" name="schools">
+        <el-button size="small" @click="showAddSchool = true" style="margin-bottom:8px">新建学校</el-button>
+        <div v-for="s in allSchools" :key="s.id" class="admin-card">
+          <div>
+            <div class="ad-name">{{ s.name }}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <el-button text type="primary" size="small" @click="editSchool(s)">编辑</el-button>
+            <el-button text type="danger" size="small" @click="deleteSchool(s)">删除</el-button>
+          </div>
+        </div>
+
+        <el-dialog v-model="showAddSchool" title="新建学校" width="90%">
+          <el-form label-width="60px">
+            <el-form-item label="名称"><el-input v-model="newSchoolName" /></el-form-item>
+            <el-button type="primary" @click="addSchool" style="width:100%">确认新建</el-button>
+          </el-form>
+        </el-dialog>
+
+        <el-dialog v-model="showEditSchool" title="编辑学校" width="90%">
+          <el-form label-width="60px">
+            <el-form-item label="名称"><el-input v-model="editSchoolName" /></el-form-item>
+            <el-button type="primary" @click="saveEditSchool" style="width:100%">保存</el-button>
+          </el-form>
+        </el-dialog>
+      </el-tab-pane>
+
       <el-tab-pane label="系统设置" name="config">
         <el-form label-width="100px" style="max-width:100%">
           <el-form-item label="学校名称">
@@ -199,6 +226,52 @@ async function restoreData(e) {
     setTimeout(() => location.reload(), 1500)
   } catch (err) {
     ElMessage.error(err.response?.data?.detail || '恢复失败')
+  }
+}
+
+// School management
+const showAddSchool = ref(false)
+const showEditSchool = ref(false)
+const newSchoolName = ref('')
+const editSchoolName = ref('')
+const editingSchoolId = ref(null)
+
+async function addSchool() {
+  if (!newSchoolName.value.trim()) return
+  await api.post('/schools', { name: newSchoolName.value.trim() })
+  ElMessage.success('学校已创建（含默认项目+班级）')
+  showAddSchool.value = false; newSchoolName.value = ''
+  const res = await api.get('/schools'); allSchools.value = res.data
+}
+
+function editSchool(s) {
+  editingSchoolId.value = s.id
+  editSchoolName.value = s.name
+  showEditSchool.value = true
+}
+
+async function saveEditSchool() {
+  await api.put(`/schools/${editingSchoolId.value}`, { name: editSchoolName.value.trim() })
+  ElMessage.success('已更新'); showEditSchool.value = false
+  const res = await api.get('/schools'); allSchools.value = res.data
+}
+
+async function deleteSchool(s) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除「${s.name}」吗？将级联删除该校所有学生、成绩、项目数据。此操作不可恢复！`,
+      '危险操作', { type: 'error', confirmButtonText: '下一步' }
+    )
+  } catch { return }
+  try {
+    const { value: password } = await ElMessageBox.prompt('请输入超级管理员密码确认', '身份验证', { inputType: 'password', confirmButtonText: '确认删除' })
+    if (!password) return
+    await api.delete(`/schools/${s.id}`, { params: { password } })
+    ElMessage.success('已删除')
+    const res = await api.get('/schools'); allSchools.value = res.data
+  } catch (err) {
+    if (err === 'cancel' || err === 'close') return
+    ElMessage.error(err.response?.data?.detail || '删除失败')
   }
 }
 
