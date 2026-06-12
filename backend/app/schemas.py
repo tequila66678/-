@@ -154,6 +154,8 @@ class AdminCreate(BaseModel):
 class AdminUpdate(BaseModel):
     display_name: Optional[str] = None
     password: Optional[str] = None
+    role: Optional[str] = None
+    school_id: Optional[int] = None
 
 # Config
 class ConfigUpdate(BaseModel):

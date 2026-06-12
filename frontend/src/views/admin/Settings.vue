@@ -56,7 +56,10 @@
             <div class="ad-name">{{ a.display_name }}</div>
             <div class="ad-role">{{ a.username }} | {{ a.role === 'super' ? '超管' : a.role === 'school_admin' ? '学校管理员' : '老师' }}</div>
           </div>
-          <el-button text type="danger" size="small" @click="deleteAdmin(a)">删除</el-button>
+          <div style="display:flex;gap:4px">
+            <el-button v-if="isSuper" text type="primary" size="small" @click="editAdmin(a)">编辑</el-button>
+            <el-button text type="danger" size="small" @click="deleteAdmin(a)">删除</el-button>
+          </div>
         </div>
 
         <el-dialog v-model="showAddAdmin" title="新增管理员" width="90%">
@@ -77,6 +80,27 @@
               </el-select>
             </el-form-item>
             <el-button type="primary" @click="addAdmin" style="width:100%">确认新增</el-button>
+          </el-form>
+        </el-dialog>
+
+        <el-dialog v-model="showEditAdmin" title="编辑管理员" width="90%">
+          <el-form label-width="60px">
+            <el-form-item label="用户名"><el-input :model-value="editAdminForm.username" disabled /></el-form-item>
+            <el-form-item label="姓名"><el-input v-model="editAdminForm.display_name" /></el-form-item>
+            <el-form-item label="新密码"><el-input v-model="editAdminForm.password" type="password" placeholder="留空不修改" /></el-form-item>
+            <el-form-item label="角色">
+              <el-select v-model="editAdminForm.role" style="width:100%">
+                <el-option label="超管" value="super" />
+                <el-option label="学校管理员" value="school_admin" />
+                <el-option label="老师" value="teacher" />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="editAdminForm.role !== 'super'" label="学校">
+              <el-select v-model="editAdminForm.school_id" style="width:100%" placeholder="选择学校">
+                <el-option v-for="s in allSchools" :key="s.id" :value="s.id" :label="s.name" />
+              </el-select>
+            </el-form-item>
+            <el-button type="primary" @click="saveEditAdmin" style="width:100%">保存修改</el-button>
           </el-form>
         </el-dialog>
       </el-tab-pane>
@@ -161,6 +185,8 @@ const standardsForm = ref(Array(10).fill(''))
 
 const showAddAdmin = ref(false)
 const newAdmin = ref({ username: '', password: '', display_name: '', role: 'teacher', school_id: null })
+const showEditAdmin = ref(false)
+const editAdminForm = ref({ id: null, username: '', display_name: '', password: '', role: 'teacher', school_id: null })
 const allSchools = ref([])
 
 onMounted(async () => {
@@ -205,6 +231,19 @@ async function addAdmin() {
 
 async function deleteAdmin(row) {
   await ElMessageBox.confirm(`确定删除 ${row.display_name}？`); await api.delete(`/admins/${row.id}`)
+  const res = await api.get('/admins'); admins.value = res.data
+}
+
+function editAdmin(a) {
+  editAdminForm.value = { id: a.id, username: a.username, display_name: a.display_name, password: '', role: a.role, school_id: a.school_id }
+  showEditAdmin.value = true
+}
+
+async function saveEditAdmin() {
+  const payload = { display_name: editAdminForm.value.display_name, role: editAdminForm.value.role, school_id: editAdminForm.value.school_id }
+  if (editAdminForm.value.password) payload.password = editAdminForm.value.password
+  await api.put(`/admins/${editAdminForm.value.id}`, payload)
+  ElMessage.success('已更新'); showEditAdmin.value = false
   const res = await api.get('/admins'); admins.value = res.data
 }
 

@@ -44,6 +44,50 @@
         </div>
       </el-tab-pane>
 
+      <!-- 年级统计 -->
+      <el-tab-pane label="年级统计" name="grade">
+        <el-select v-model="gradeEventIds" multiple placeholder="选择项目（可选）" @change="loadGradeStats" style="width:100%;margin-bottom:8px" size="default" collapse-tags>
+          <el-option v-for="e in events" :key="e.id" :label="e.name" :value="e.id" />
+        </el-select>
+
+        <div v-if="gradeStatsList && gradeStatsList.length" v-for="g in gradeStatsList" :key="g.grade" style="margin-bottom:20px">
+          <h4 style="margin-bottom:8px;color:#303133">{{ g.grade }}</h4>
+          <el-row :gutter="8">
+            <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ g.total_students }}</h2></el-card></el-col>
+            <el-col :span="6" class="stat-col"><el-card><template #header>班级数</template><h2>{{ g.total_classes }}</h2></el-card></el-col>
+            <el-col :span="6" class="stat-col"><el-card><template #header>平均分</template><h2>{{ g.avg_score }}</h2></el-card></el-col>
+            <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ g.excellent_rate }}%</h2></el-card></el-col>
+            <el-col :span="6" class="stat-col"><el-card><template #header>及格率</template><h2>{{ g.pass_rate }}%</h2></el-card></el-col>
+          </el-row>
+
+          <div v-if="g.event_avgs?.length" style="margin-top:8px">
+            <h4>各项目平均分</h4>
+            <div v-for="e in g.event_avgs" :key="e.event_id" class="event-bar">
+              <span class="event-name">{{ e.event_name }}</span>
+              <el-progress :percentage="e.avg_score * 10" color="#409EFF" style="flex:1;margin:0 8px" />
+              <span>{{ e.avg_score }} ({{ e.count }}人)</span>
+            </div>
+          </div>
+
+          <div v-if="g.class_summaries?.length" style="margin-top:8px">
+            <h4>各班平均分</h4>
+            <div v-for="c in g.class_summaries" :key="c.class_id" class="event-bar">
+              <span class="event-name">{{ c.class_name }}</span>
+              <el-progress :percentage="c.avg_score * 10" color="#67c23a" style="flex:1;margin:0 8px" />
+              <span>{{ c.avg_score }} ({{ c.students }}人)</span>
+            </div>
+          </div>
+
+          <div v-if="g.warning_students?.length" style="margin-top:8px">
+            <el-text type="warning" size="small">橙色预警</el-text>
+            <div v-for="w in g.warning_students" :key="w.student_no" class="warn-card">
+              {{ w.student_name }}({{ w.student_gender === 'M' ? '男' : '女' }}) {{ w.class_name }} {{ w.event_name }}: {{ w.prev_score }}→{{ w.curr_score }}
+            </div>
+          </div>
+        </div>
+        <div v-else style="text-align:center;color:#ccc;padding:40px">暂未选择或该年级没有数据</div>
+      </el-tab-pane>
+
       <!-- 班级统计 -->
       <el-tab-pane label="班级统计" name="class">
         <el-select v-model="statsClassId" placeholder="选择班级" @change="loadClassStats" style="width:100%;margin-bottom:8px" size="default">
@@ -135,6 +179,10 @@ const showExport = ref(false)
 const schoolEventIds = ref([])
 const schoolStats = ref(null)
 
+// Grade stats
+const gradeEventIds = ref([])
+const gradeStatsList = ref(null)
+
 // Class stats
 const statsClassId = ref(null)
 const statsEventIds = ref([])
@@ -156,6 +204,12 @@ async function loadSchoolStats() {
   const params = {}
   if (schoolEventIds.value.length) params.event_ids = schoolEventIds.value.join(',')
   const res = await api.get('/scores/school-stats', { params }); schoolStats.value = res.data
+}
+
+async function loadGradeStats() {
+  const params = {}
+  if (gradeEventIds.value.length) params.event_ids = gradeEventIds.value.join(',')
+  const res = await api.get('/scores/grade-stats', { params }); gradeStatsList.value = res.data
 }
 
 async function loadClassStats() {

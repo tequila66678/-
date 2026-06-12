@@ -69,15 +69,33 @@ def update_admin(admin_id: int, data: AdminUpdate, db: Session = Depends(get_db)
     if not admin:
         raise HTTPException(404, "管理员不存在")
 
-    if current.role != "super":
-        # School admin can only update teachers in their own school
+    if current.role == "super":
+        # Super admin can change role, school_id, display_name, password
+        if data.display_name is not None:
+            admin.display_name = data.display_name
+        if data.password is not None:
+            admin.password_hash = hash_password(data.password)
+        if data.role is not None:
+            if data.role not in ("super", "school_admin", "teacher"):
+                raise HTTPException(400, "无效的角色")
+            if admin.id == current.id and data.role != "super":
+                raise HTTPException(400, "不能取消自己的超级管理员权限")
+            admin.role = data.role
+            if data.role == "super":
+                admin.school_id = None
+        if data.school_id is not None:
+            admin.school_id = data.school_id
+    else:
+        # School admin can only update display_name/password of teachers in their own school
         if admin.role == "super" or admin.school_id != require_school(current):
             raise HTTPException(403, "无权限修改此管理员")
+        if data.role is not None or data.school_id is not None:
+            raise HTTPException(403, "仅超级管理员可修改角色和所属学校")
+        if data.display_name is not None:
+            admin.display_name = data.display_name
+        if data.password is not None:
+            admin.password_hash = hash_password(data.password)
 
-    if data.display_name is not None:
-        admin.display_name = data.display_name
-    if data.password is not None:
-        admin.password_hash = hash_password(data.password)
     db.commit()
     db.refresh(admin)
     return _enrich(AdminOut.model_validate(admin), admin)

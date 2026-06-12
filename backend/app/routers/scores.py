@@ -609,6 +609,114 @@ def school_stats(
         "warning_students": warning_students
     }
 
+
+@router.get("/grade-stats")
+def grade_stats(
+    event_ids: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Grade-level statistics: group classes by grade and aggregate."""
+    sid = _get_admin_school(current)
+    event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).order_by(SportEvent.sort_order).all()
+    if event_id_list:
+        events = [e for e in events if e.id in event_id_list]
+
+    all_classes = db.query(Class).filter(Class.school_id == sid).order_by(Class.grade, Class.name).all()
+    all_scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
+
+    # Latest per student per event
+    latest = {}
+    for sc in all_scores:
+        key = (sc.student_id, sc.event_id)
+        if key not in latest:
+            latest[key] = sc
+
+    # Group classes by grade
+    grade_classes = defaultdict(list)
+    for cls in all_classes:
+        grade_classes[cls.grade].append(cls)
+
+    result = []
+    for grade_name, classes_in_grade in sorted(grade_classes.items()):
+        class_ids = [c.id for c in classes_in_grade]
+        grade_students = db.query(Student).filter(Student.class_id.in_(class_ids)).all()
+        grade_student_ids = [s.id for s in grade_students]
+
+        event_scores = defaultdict(list)
+        student_totals = defaultdict(list)
+        for (st_id, eid), sc in latest.items():
+            if st_id in grade_student_ids and eid in [e.id for e in events]:
+                event_scores[eid].append(sc.earned_score)
+                student_totals[st_id].append(sc.earned_score)
+
+        event_avgs = []
+        for e in events:
+            scores_list = event_scores.get(e.id, [])
+            avg = sum(scores_list) / len(scores_list) if scores_list else 0
+            event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
+
+        total_scores = [sum(v) for v in student_totals.values() if v]
+        n_students = len(student_totals)
+        max_per_student = len(events)
+        overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
+        excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
+        pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
+
+        class_summaries = []
+        for cls in classes_in_grade:
+            cls_students = [s for s in grade_students if s.class_id == cls.id]
+            cls_total = 0
+            cls_count = 0
+            for s in cls_students:
+                if s.id in student_totals:
+                    cls_total += sum(student_totals[s.id])
+                    cls_count += 1
+            cls_avg = cls_total / (cls_count * max_per_student) * 10 if cls_count > 0 and max_per_student > 0 else 0
+            class_summaries.append({
+                "class_id": cls.id, "class_name": f"{cls.grade}{cls.name}",
+                "students": len(cls_students), "avg_score": round(cls_avg, 1)
+            })
+
+        warning_students = []
+        for s in grade_students:
+            for e in events:
+                student_scores = sorted(
+                    [sc for sc in all_scores if sc.student_id == s.id and sc.event_id == e.id],
+                    key=lambda x: x.test_date
+                )
+                if len(student_scores) >= 2:
+                    prev = student_scores[-2].earned_score
+                    curr = student_scores[-1].earned_score
+                    if prev - curr >= 2:
+                        cls_name = ""
+                        for c in classes_in_grade:
+                            if c.id == s.class_id:
+                                cls_name = f"{c.grade}{c.name}"
+                                break
+                        warning_students.append({
+                            "student_no": s.student_id, "student_name": s.name,
+                            "student_gender": s.gender.value,
+                            "class_name": cls_name,
+                            "event_name": e.name, "prev_score": prev, "curr_score": curr
+                        })
+
+        result.append({
+            "grade": grade_name,
+            "total_students": n_students,
+            "total_classes": len(classes_in_grade),
+            "avg_score": round(overall_avg, 1),
+            "excellent_rate": round(excellent_count / n_students * 100, 1) if n_students else 0,
+            "pass_rate": round(pass_count / n_students * 100, 1) if n_students else 0,
+            "event_avgs": event_avgs,
+            "class_summaries": class_summaries,
+            "warning_students": warning_students[:10]
+        })
+
+    return result
+
+
 @router.post("/export/preview")
 def export_preview(
     scope: str = Query(...),        # "school" | "class" | "student"
