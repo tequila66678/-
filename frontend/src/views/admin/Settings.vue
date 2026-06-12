@@ -164,10 +164,14 @@ const adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}')
 const isSuper = adminInfo.role === 'super'
 
 onMounted(async () => {
-  const [eRes, aRes, cRes] = await Promise.all([api.get('/events'), api.get('/admins'), api.get('/config')])
-  events.value = eRes.data; admins.value = aRes.data
-  for (const c of cRes.data) { if (c.key in config.value) config.value[c.key] = c.key.includes('threshold') ? parseInt(c.value) : c.value }
-  try { const sRes = await api.get('/schools'); allSchools.value = sRes.data } catch {}
+  try {
+    const [eRes, aRes, cRes] = await Promise.all([api.get('/events'), api.get('/admins'), api.get('/config')])
+    events.value = eRes.data; admins.value = aRes.data
+    for (const c of cRes.data) { if (c.key in config.value) config.value[c.key] = c.key.includes('threshold') ? parseInt(c.value) : c.value }
+  } catch { /* one or more APIs failed — show what we can */ }
+  if (isSuper) {
+    try { const sRes = await api.get('/schools'); allSchools.value = sRes.data } catch {}
+  }
 })
 
 async function addEvent() {

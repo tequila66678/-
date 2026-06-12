@@ -29,6 +29,9 @@
             <el-button :disabled="!selectedClassId" @click="$refs.batchFile.click()" style="width:100%">
               📊 批量导入成绩
             </el-button>
+            <el-button :disabled="!selectedClassId" @click="downloadTemplate" style="width:100%;margin-top:6px">
+              📥 下载导入模板
+            </el-button>
             <div style="font-size:11px;color:#999;margin-top:4px">
               Excel格式：学号 | 姓名 | 项目1 | 项目2 ...
             </div>
@@ -197,6 +200,23 @@ async function batchImport(e) {
   } catch (err) {
     loading.close()
     ElMessage.error(err.response?.data?.detail || '导入失败')
+  }
+}
+
+async function downloadTemplate() {
+  try {
+    const res = await api.get('/scores/batch-import-template', { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', '成绩导入模板.xlsx')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('模板已下载')
+  } catch (err) {
+    ElMessage.error(err.response?.data?.detail || '下载模板失败')
   }
 }
 

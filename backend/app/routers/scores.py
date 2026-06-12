@@ -127,6 +127,47 @@ def batch_save_scores(
     db.commit()
     return results
 
+@router.get("/batch-import-template")
+def download_batch_import_template(
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Download an Excel template for batch score import with event columns."""
+    sid = _get_admin_school(current)
+    if sid is None:
+        raise HTTPException(400, "请先选择学校再进行操作")
+
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).order_by(SportEvent.sort_order).all()
+    if not events:
+        raise HTTPException(400, "当前学校没有体育项目，请先在项目设置中添加")
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "成绩导入模板"
+
+    headers = ["学号", "姓名"] + [e.name for e in events]
+    ws.append(headers)
+
+    # Example row
+    example = ["202401", "张三"] + [""] * len(events)
+    ws.append(example)
+
+    # Format: auto-width for readability
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = openpyxl.styles.Font(bold=True)
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=score_import_template.xlsx"}
+    )
+
+
 @router.post("/batch-import")
 def batch_import_scores(
     class_id: int = Query(...),

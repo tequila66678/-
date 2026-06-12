@@ -11,7 +11,10 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 @router.get("", response_model=list[ConfigOut])
 def list_config(db: Session = Depends(get_db), current: Admin = Depends(get_school_admin)):
     sid = require_school(current)
-    return db.query(SystemConfig).filter(SystemConfig.school_id == sid).all()
+    q = db.query(SystemConfig)
+    if sid is not None:
+        q = q.filter(SystemConfig.school_id == sid)
+    return q.all()
 
 @router.get("/public")
 def get_public_config(school_id: Optional[int] = None, db: Session = Depends(get_db)):
