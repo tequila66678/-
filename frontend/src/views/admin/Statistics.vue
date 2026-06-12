@@ -10,13 +10,26 @@
         </el-select>
         <el-button type="primary" size="small" @click="showExport = true" style="margin-bottom:12px">导出全校成绩</el-button>
 
+        <el-text size="small" type="info" style="margin-bottom:8px;display:block">📅 统计口径：近30天各项目最好成绩 &nbsp;|&nbsp; 🎯 中考总分=每人最好3项之和（满分30）</el-text>
+
         <el-row :gutter="8" v-if="schoolStats">
           <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ schoolStats.total_students }}<span style="font-size:11px;color:#999;font-weight:normal"> / 参与{{ schoolStats.participants }}</span></h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>班级数</template><h2>{{ schoolStats.total_classes }}</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>平均分</template><h2>{{ schoolStats.avg_score }}</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ schoolStats.excellent_rate }}%</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>及格率</template><h2>{{ schoolStats.pass_rate }}%</h2></el-card></el-col>
+          <el-col :span="6" class="stat-col"><el-card class="full-score-card"><template #header>🏆 中考满分率</template><h2 style="color:#e6a23c">{{ schoolStats.full_score_rate }}%</h2></el-card></el-col>
         </el-row>
+
+        <el-card v-if="scoreDistChart" style="margin-top:12px">
+          <template #header>中考总分分布</template>
+          <v-chart :option="scoreDistChart" style="height:280px" autoresize />
+        </el-card>
+
+        <el-card v-if="eventBarChart" style="margin-top:12px">
+          <template #header>各项目统计</template>
+          <v-chart :option="eventBarChart" style="height:300px" autoresize />
+        </el-card>
 
         <div v-if="schoolStats?.event_avgs?.length" style="margin-top:12px">
           <h4>各项目全校平均分</h4>
@@ -46,6 +59,7 @@
 
       <!-- 年级统计 -->
       <el-tab-pane label="年级统计" name="grade">
+        <el-text size="small" type="info" style="margin-bottom:8px;display:block">📅 统计口径：近30天各项目最好成绩 &nbsp;|&nbsp; 🎯 中考总分=每人最好3项之和（满分30）</el-text>
         <el-select v-model="gradeFilter" placeholder="选择年级" @change="loadGradeStats" style="width:100%;margin-bottom:8px" size="default" clearable>
           <el-option v-for="g in gradeOptions" :key="g" :label="g" :value="g" />
         </el-select>
@@ -53,7 +67,7 @@
           <el-option v-for="e in events" :key="e.id" :label="e.name" :value="e.id" />
         </el-select>
 
-        <div v-if="gradeStatsList && gradeStatsList.length" v-for="g in gradeStatsList" :key="g.grade" style="margin-bottom:20px">
+        <div v-if="gradeStatsList && gradeStatsList.length" v-for="(g, gi) in gradeStatsList" :key="g.grade" style="margin-bottom:20px">
           <h4 style="margin-bottom:8px;color:#303133">{{ g.grade }}</h4>
           <el-row :gutter="8">
             <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ g.total_students }}<span style="font-size:11px;color:#999;font-weight:normal"> / 参与{{ g.participants }}</span></h2></el-card></el-col>
@@ -61,7 +75,13 @@
             <el-col :span="6" class="stat-col"><el-card><template #header>平均分</template><h2>{{ g.avg_score }}</h2></el-card></el-col>
             <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ g.excellent_rate }}%</h2></el-card></el-col>
             <el-col :span="6" class="stat-col"><el-card><template #header>及格率</template><h2>{{ g.pass_rate }}%</h2></el-card></el-col>
+            <el-col :span="6" class="stat-col"><el-card class="full-score-card"><template #header>🏆 中考满分率</template><h2 style="color:#e6a23c">{{ g.full_score_rate }}%</h2></el-card></el-col>
           </el-row>
+
+          <el-card v-if="g.score_distribution?.length" style="margin-top:8px">
+            <template #header>中考总分分布</template>
+            <v-chart :option="makeDistChart(g.score_distribution)" style="height:220px" autoresize />
+          </el-card>
 
           <div v-if="g.event_avgs?.length" style="margin-top:8px">
             <h4>各项目平均分</h4>
@@ -106,7 +126,13 @@
           <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ classStats.excellent_rate }}%</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>及格率</template><h2>{{ classStats.pass_rate }}%</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>人数</template><h2>{{ classStats.total_students }}<span v-if="classStats.participants != null" style="font-size:11px;color:#999;font-weight:normal"> / 参与{{ classStats.participants }}</span></h2></el-card></el-col>
+          <el-col :span="6" class="stat-col"><el-card class="full-score-card"><template #header>🏆 中考满分率</template><h2 style="color:#e6a23c">{{ classStats.full_score_rate }}%</h2></el-card></el-col>
         </el-row>
+
+        <el-card v-if="classStats?.score_distribution?.length" style="margin-top:12px">
+          <template #header>中考总分分布</template>
+          <v-chart :option="makeDistChart(classStats.score_distribution)" style="height:240px" autoresize />
+        </el-card>
 
         <div v-if="classStats?.event_avgs?.length" style="margin-top:12px">
           <h4>各项目平均分</h4>
@@ -246,6 +272,51 @@ async function deleteScore(scoreId) {
 
 function reloadStudentStats() { if (currentStudentId) loadStudentStats() }
 
+// Build a score distribution bar chart from [{label, count}] data
+function makeDistChart(distribution) {
+  if (!distribution?.length) return null
+  const colors = ['#67c23a', '#409EFF', '#e6a23c', '#f56c6c', '#909399']
+  return {
+    tooltip: { trigger: 'axis', formatter: p => `${p[0]?.name}: ${p[0]?.value}人` },
+    grid: { left: 50, right: 20, top: 10, bottom: 40 },
+    xAxis: { type: 'category', data: distribution.map(d => d.label), axisLabel: { fontSize: 11 } },
+    yAxis: { type: 'value', name: '人数', minInterval: 1 },
+    series: [{
+      type: 'bar', barWidth: '50%',
+      data: distribution.map((d, i) => ({ value: d.count, itemStyle: { color: colors[i] || '#909399' } })),
+      label: { show: true, position: 'top', fontSize: 12 }
+    }]
+  }
+}
+
+// School-level 中考总分分布 chart
+const scoreDistChart = computed(() => {
+  if (!schoolStats.value?.score_distribution?.length) return null
+  return makeDistChart(schoolStats.value.score_distribution)
+})
+
+// School-level event overview bar chart (participation count + avg score)
+const eventBarChart = computed(() => {
+  if (!schoolStats.value?.event_avgs?.length) return null
+  const names = schoolStats.value.event_avgs.map(e => e.event_name)
+  const counts = schoolStats.value.event_avgs.map(e => e.count)
+  const avgs = schoolStats.value.event_avgs.map(e => e.avg_score)
+  return {
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['参与人数', '平均分'], bottom: 0 },
+    grid: { left: 50, right: 50, top: 10, bottom: 50 },
+    xAxis: { type: 'category', data: names, axisLabel: { rotate: names.length > 5 ? 30 : 0, fontSize: 11 } },
+    yAxis: [
+      { type: 'value', name: '人数', minInterval: 1 },
+      { type: 'value', name: '分', min: 0, max: 10 }
+    ],
+    series: [
+      { name: '参与人数', type: 'bar', data: counts, barWidth: '40%', itemStyle: { color: '#409EFF' }, label: { show: true, position: 'top', fontSize: 10 } },
+      { name: '平均分', type: 'line', yAxisIndex: 1, data: avgs, itemStyle: { color: '#e6a23c' }, label: { show: true, fontSize: 10 } }
+    ]
+  }
+})
+
 const chartOption = computed(() => {
   if (!studentStats.value?.scores_by_event) return null
   const data = studentStats.value.scores_by_event
@@ -326,5 +397,6 @@ const chartOption = computed(() => {
 .event-name { width: 100px; font-size: 13px; flex-shrink: 0; }
 .warn-card { padding: 8px; background: #fef0f0; border-radius: 6px; margin-bottom: 4px; font-size: 13px; animation: warn-breath 2.5s ease-in-out infinite; }
 .rec-item { font-size: 16px; margin: 4px 0; }
+.full-score-card :deep(.el-card__header) { background: #fdf6ec; color: #e6a23c; font-weight: bold; }
 @keyframes warn-breath { 0%, 100% { box-shadow: 0 0 0 0 rgba(230, 162, 60, 0); } 50% { box-shadow: 0 0 8px 3px rgba(230, 162, 60, 0.25); } }
 </style>

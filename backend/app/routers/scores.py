@@ -37,6 +37,29 @@ def _pick_best_in_window(scores, days=30):
             best[key] = sc
     return best
 
+def _calc_top3_scores(student_totals: dict) -> list:
+    """每人取最高3项得分之和（中考总分），返回所有学生的总分列表"""
+    return [sum(sorted(scores, reverse=True)[:3]) for scores in student_totals.values() if scores]
+
+def _score_distribution(totals: list, participants: int) -> dict:
+    """将中考总分分档统计，返回满分率和各档位人数"""
+    buckets = {"30(满分)": 0, "28-29": 0, "25-27": 0, "20-24": 0, "20以下": 0}
+    for t in totals:
+        if t >= 30:
+            buckets["30(满分)"] += 1
+        elif t >= 28:
+            buckets["28-29"] += 1
+        elif t >= 25:
+            buckets["25-27"] += 1
+        elif t >= 20:
+            buckets["20-24"] += 1
+        else:
+            buckets["20以下"] += 1
+    return {
+        "full_score_rate": round(buckets["30(满分)"] / participants * 100, 1) if participants else 0,
+        "buckets": [{"label": k, "count": v} for k, v in buckets.items()]
+    }
+
 def _get_previous_score(db: Session, student_db_id: int, event_id: int, current_date: date) -> Optional[Score]:
     return (
         db.query(Score)
@@ -296,13 +319,13 @@ def class_stats(
     current: Admin = Depends(get_current_admin)
 ):
     sid = _get_admin_school(current)
-    cls = db.query(Class).filter(Class.id == class_id, Class.school_id == sid).first()
+    cls = _maybe_filter(db.query(Class), Class, sid).filter(Class.id == class_id).first()
     if not cls:
         raise HTTPException(404, "班级不存在")
 
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
     students = db.query(Student).filter(Student.class_id == class_id).all()
-    scores_q = db.query(Score).filter(
+    scores_q = _maybe_filter(db.query(Score), Score, sid).filter(
         Score.student_id.in_([s.id for s in students])
     )
     if event_id_list:
@@ -311,7 +334,7 @@ def class_stats(
     all_scores = scores_q.order_by(Score.test_date.desc()).all()
     best = _pick_best_in_window(all_scores)
 
-    events = db.query(SportEvent).filter(SportEvent.school_id == sid).all()
+    events = _maybe_filter(db.query(SportEvent), SportEvent, sid).order_by(SportEvent.sort_order).all()
     if event_id_list:
         events = [e for e in events if e.id in event_id_list]
 
@@ -327,12 +350,16 @@ def class_stats(
         avg = sum(scores_list) / len(scores_list) if scores_list else 0
         event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
 
-    total_scores = [sum(v) for v in student_totals.values() if v]
+    all_scores_list = [sum(v) for v in student_totals.values() if v]
     max_per_student = len(events)
     n_participants = len(student_totals)
-    overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
-    excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
-    pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
+    overall_avg = sum(all_scores_list) / len(all_scores_list) if all_scores_list else 0
+    excellent_count = sum(1 for t in all_scores_list if max_per_student > 0 and t / max_per_student >= 9)
+    pass_count = sum(1 for t in all_scores_list if max_per_student > 0 and t / max_per_student >= 6)
+
+    # 中考总分（每人最好3项之和）
+    total_scores_3best = _calc_top3_scores(student_totals)
+    dist = _score_distribution(total_scores_3best, n_participants)
 
     warning_students = []
     for s in students:
@@ -350,6 +377,7 @@ def class_stats(
                         "student_name": s.name,
                         "student_no": s.student_id,
                         "student_gender": s.gender.value,
+                        "class_name": f"{cls.grade}{cls.name}",
                         "event_name": e.name,
                         "prev_score": prev_score,
                         "curr_score": curr_score
@@ -363,6 +391,8 @@ def class_stats(
         "avg_score": round(overall_avg, 1),
         "excellent_rate": round(excellent_count / n_participants * 100, 1) if n_participants else 0,
         "pass_rate": round(pass_count / n_participants * 100, 1) if n_participants else 0,
+        "full_score_rate": dist["full_score_rate"],
+        "score_distribution": dist["buckets"],
         "event_avgs": event_avgs,
         "warning_students": warning_students
     }
@@ -541,12 +571,12 @@ def school_stats(
     """School-wide statistics."""
     sid = _get_admin_school(current)
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
-    events = db.query(SportEvent).filter(SportEvent.school_id == sid).order_by(SportEvent.sort_order).all()
+    events = _maybe_filter(db.query(SportEvent), SportEvent, sid).order_by(SportEvent.sort_order).all()
     if event_id_list:
         events = [e for e in events if e.id in event_id_list]
 
-    all_students = db.query(Student).join(Class).filter(Class.school_id == sid).all()
-    all_scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
+    all_students = _maybe_filter(db.query(Student).join(Class), Class, sid).all()
+    all_scores = _maybe_filter(db.query(Score), Score, sid).order_by(Score.test_date.desc()).all()
 
     # Best score per student per event within last 30 days
     best = _pick_best_in_window(all_scores)
@@ -564,14 +594,23 @@ def school_stats(
         avg = sum(scores_list) / len(scores_list) if scores_list else 0
         event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
 
-    total_scores = [sum(v) for v in student_totals.values() if v]
+    all_scores_list = [sum(v) for v in student_totals.values() if v]
     n_participants = len(student_totals)
     max_per_student = len(events)
-    overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
-    excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
-    pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
+    overall_avg = sum(all_scores_list) / len(all_scores_list) if all_scores_list else 0
+    excellent_count = sum(1 for t in all_scores_list if max_per_student > 0 and t / max_per_student >= 9)
+    pass_count = sum(1 for t in all_scores_list if max_per_student > 0 and t / max_per_student >= 6)
 
-    classes = db.query(Class).filter(Class.school_id == sid).order_by(Class.grade, Class.name).all()
+    # 中考总分（每人最好3项之和）
+    total_scores_3best = _calc_top3_scores(student_totals)
+    dist = _score_distribution(total_scores_3best, n_participants)
+
+    classes = _maybe_filter(db.query(Class), Class, sid).order_by(Class.grade, Class.name).all()
+    # Build student-id -> class lookup for warning
+    student_class_map = {}
+    for s in all_students:
+        student_class_map[s.id] = f"{s.class_.grade}{s.class_.name}" if s.class_ else ""
+
     class_summaries = []
     for cls in classes:
         cls_students = [s for s in all_students if s.class_id == cls.id]
@@ -602,6 +641,7 @@ def school_stats(
                     warning_students.append({
                         "student_no": s.student_id, "student_name": s.name,
                         "student_gender": s.gender.value,
+                        "class_name": student_class_map.get(s.id, ""),
                         "event_name": e.name, "prev_score": prev, "curr_score": curr
                     })
 
@@ -612,6 +652,8 @@ def school_stats(
         "avg_score": round(overall_avg, 1),
         "excellent_rate": round(excellent_count / n_participants * 100, 1) if n_participants else 0,
         "pass_rate": round(pass_count / n_participants * 100, 1) if n_participants else 0,
+        "full_score_rate": dist["full_score_rate"],
+        "score_distribution": dist["buckets"],
         "event_avgs": event_avgs,
         "class_summaries": class_summaries,
         "warning_students": warning_students
@@ -628,12 +670,12 @@ def grade_stats(
     """Grade-level statistics: group classes by grade and aggregate."""
     sid = _get_admin_school(current)
     event_id_list = [int(x) for x in event_ids.split(",")] if event_ids else None
-    events = db.query(SportEvent).filter(SportEvent.school_id == sid).order_by(SportEvent.sort_order).all()
+    events = _maybe_filter(db.query(SportEvent), SportEvent, sid).order_by(SportEvent.sort_order).all()
     if event_id_list:
         events = [e for e in events if e.id in event_id_list]
 
-    all_classes = db.query(Class).filter(Class.school_id == sid).order_by(Class.grade, Class.name).all()
-    all_scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
+    all_classes = _maybe_filter(db.query(Class), Class, sid).order_by(Class.grade, Class.name).all()
+    all_scores = _maybe_filter(db.query(Score), Score, sid).order_by(Score.test_date.desc()).all()
 
     # Best score per student per event within last 30 days
     best = _pick_best_in_window(all_scores)
@@ -665,12 +707,16 @@ def grade_stats(
             avg = sum(scores_list) / len(scores_list) if scores_list else 0
             event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
 
-        total_scores = [sum(v) for v in student_totals.values() if v]
+        all_scores_for_grade = [sum(v) for v in student_totals.values() if v]
         n_participants = len(student_totals)
         max_per_student = len(events)
-        overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
-        excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
-        pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
+        overall_avg = sum(all_scores_for_grade) / len(all_scores_for_grade) if all_scores_for_grade else 0
+        excellent_count = sum(1 for t in all_scores_for_grade if max_per_student > 0 and t / max_per_student >= 9)
+        pass_count = sum(1 for t in all_scores_for_grade if max_per_student > 0 and t / max_per_student >= 6)
+
+        # 中考总分（每人最好3项之和）
+        total_scores_3best = _calc_top3_scores(student_totals)
+        dist = _score_distribution(total_scores_3best, n_participants)
 
         class_summaries = []
         for cls in classes_in_grade:
@@ -719,9 +765,11 @@ def grade_stats(
             "avg_score": round(overall_avg, 1),
             "excellent_rate": round(excellent_count / n_participants * 100, 1) if n_participants else 0,
             "pass_rate": round(pass_count / n_participants * 100, 1) if n_participants else 0,
+            "full_score_rate": dist["full_score_rate"],
+            "score_distribution": dist["buckets"],
             "event_avgs": event_avgs,
             "class_summaries": class_summaries,
-            "warning_students": warning_students[:10]
+            "warning_students": warning_students
         })
 
     return result

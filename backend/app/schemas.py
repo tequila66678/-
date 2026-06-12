@@ -119,20 +119,28 @@ class ScoreWithChange(ScoreOut):
     is_praise: bool = False
     is_warning: bool = False
 
+class DistributionBucket(BaseModel):
+    label: str
+    count: int
+
 class EventAvgScore(BaseModel):
     event_id: int
     event_name: str
     avg_score: float
+    count: int = 0
 
 class ClassStatsOut(BaseModel):
     class_id: int
     class_name: str
     total_students: int
+    participants: int = 0
     avg_score: float
     excellent_rate: float
     pass_rate: float
-    event_avgs: list[EventAvgScore]
-    warning_students: list[dict]
+    full_score_rate: float = 0
+    score_distribution: list[DistributionBucket] = []
+    event_avgs: list[EventAvgScore] = []
+    warning_students: list[dict] = []
 
 class StudentStatsOut(BaseModel):
     student: StudentOut
