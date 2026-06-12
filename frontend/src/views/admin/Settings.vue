@@ -145,6 +145,9 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 
+const adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}')
+const isSuper = adminInfo.role === 'super'
+
 const activeTab = ref(isSuper ? 'events' : 'admins')
 const events = ref([])
 const admins = ref([])
@@ -159,9 +162,6 @@ const standardsForm = ref(Array(10).fill(''))
 const showAddAdmin = ref(false)
 const newAdmin = ref({ username: '', password: '', display_name: '', role: 'teacher', school_id: null })
 const allSchools = ref([])
-
-const adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}')
-const isSuper = adminInfo.role === 'super'
 
 onMounted(async () => {
   try {
