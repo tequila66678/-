@@ -613,6 +613,7 @@ def school_stats(
 @router.get("/grade-stats")
 def grade_stats(
     event_ids: Optional[str] = Query(None),
+    grade: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
@@ -637,6 +638,9 @@ def grade_stats(
     grade_classes = defaultdict(list)
     for cls in all_classes:
         grade_classes[cls.grade].append(cls)
+
+    if grade:
+        grade_classes = {grade: grade_classes[grade]} if grade in grade_classes else {}
 
     result = []
     for grade_name, classes_in_grade in sorted(grade_classes.items()):

@@ -46,6 +46,9 @@
 
       <!-- 年级统计 -->
       <el-tab-pane label="年级统计" name="grade">
+        <el-select v-model="gradeFilter" placeholder="选择年级" @change="loadGradeStats" style="width:100%;margin-bottom:8px" size="default" clearable>
+          <el-option v-for="g in gradeOptions" :key="g" :label="g" :value="g" />
+        </el-select>
         <el-select v-model="gradeEventIds" multiple placeholder="选择项目（可选）" @change="loadGradeStats" style="width:100%;margin-bottom:8px" size="default" collapse-tags>
           <el-option v-for="e in events" :key="e.id" :label="e.name" :value="e.id" />
         </el-select>
@@ -180,8 +183,10 @@ const schoolEventIds = ref([])
 const schoolStats = ref(null)
 
 // Grade stats
+const gradeFilter = ref(null)
 const gradeEventIds = ref([])
 const gradeStatsList = ref(null)
+const gradeOptions = computed(() => [...new Set(classes.value.map(c => c.grade))].sort())
 
 // Class stats
 const statsClassId = ref(null)
@@ -208,6 +213,7 @@ async function loadSchoolStats() {
 
 async function loadGradeStats() {
   const params = {}
+  if (gradeFilter.value) params.grade = gradeFilter.value
   if (gradeEventIds.value.length) params.event_ids = gradeEventIds.value.join(',')
   const res = await api.get('/scores/grade-stats', { params }); gradeStatsList.value = res.data
 }
