@@ -11,7 +11,7 @@
         <el-button type="primary" size="small" @click="showExport = true" style="margin-bottom:12px">导出全校成绩</el-button>
 
         <el-row :gutter="8" v-if="schoolStats">
-          <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ schoolStats.total_students }}</h2></el-card></el-col>
+          <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ schoolStats.total_students }}<span style="font-size:11px;color:#999;font-weight:normal"> / 参与{{ schoolStats.participants }}</span></h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>班级数</template><h2>{{ schoolStats.total_classes }}</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>平均分</template><h2>{{ schoolStats.avg_score }}</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ schoolStats.excellent_rate }}%</h2></el-card></el-col>
@@ -32,7 +32,7 @@
           <div v-for="c in schoolStats.class_summaries" :key="c.class_id" class="event-bar">
             <span class="event-name">{{ c.class_name }}</span>
             <el-progress :percentage="c.avg_score * 10" color="#67c23a" style="flex:1;margin:0 8px" />
-            <span>{{ c.avg_score }} ({{ c.students }}人)</span>
+            <span>{{ c.avg_score }} ({{ c.participants }}/{{ c.students }}人)</span>
           </div>
         </div>
 
@@ -56,7 +56,7 @@
         <div v-if="gradeStatsList && gradeStatsList.length" v-for="g in gradeStatsList" :key="g.grade" style="margin-bottom:20px">
           <h4 style="margin-bottom:8px;color:#303133">{{ g.grade }}</h4>
           <el-row :gutter="8">
-            <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ g.total_students }}</h2></el-card></el-col>
+            <el-col :span="6" class="stat-col"><el-card><template #header>总人数</template><h2>{{ g.total_students }}<span style="font-size:11px;color:#999;font-weight:normal"> / 参与{{ g.participants }}</span></h2></el-card></el-col>
             <el-col :span="6" class="stat-col"><el-card><template #header>班级数</template><h2>{{ g.total_classes }}</h2></el-card></el-col>
             <el-col :span="6" class="stat-col"><el-card><template #header>平均分</template><h2>{{ g.avg_score }}</h2></el-card></el-col>
             <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ g.excellent_rate }}%</h2></el-card></el-col>
@@ -77,7 +77,7 @@
             <div v-for="c in g.class_summaries" :key="c.class_id" class="event-bar">
               <span class="event-name">{{ c.class_name }}</span>
               <el-progress :percentage="c.avg_score * 10" color="#67c23a" style="flex:1;margin:0 8px" />
-              <span>{{ c.avg_score }} ({{ c.students }}人)</span>
+              <span>{{ c.avg_score }} ({{ c.participants }}/{{ c.students }}人)</span>
             </div>
           </div>
 
@@ -105,7 +105,7 @@
           <el-col :span="6" class="stat-col"><el-card><template #header>平均分</template><h2>{{ classStats.avg_score }}</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>优秀率</template><h2>{{ classStats.excellent_rate }}%</h2></el-card></el-col>
           <el-col :span="6" class="stat-col"><el-card><template #header>及格率</template><h2>{{ classStats.pass_rate }}%</h2></el-card></el-col>
-          <el-col :span="6" class="stat-col"><el-card><template #header>人数</template><h2>{{ classStats.total_students }}</h2></el-card></el-col>
+          <el-col :span="6" class="stat-col"><el-card><template #header>人数</template><h2>{{ classStats.total_students }}<span v-if="classStats.participants != null" style="font-size:11px;color:#999;font-weight:normal"> / 参与{{ classStats.participants }}</span></h2></el-card></el-col>
         </el-row>
 
         <div v-if="classStats?.event_avgs?.length" style="margin-top:12px">
@@ -113,7 +113,7 @@
           <div v-for="e in classStats.event_avgs" :key="e.event_id" class="event-bar">
             <span class="event-name">{{ e.event_name }}</span>
             <el-progress :percentage="e.avg_score * 10" color="#409EFF" style="flex:1;margin:0 8px" />
-            <span>{{ e.avg_score }}</span>
+            <span>{{ e.avg_score }} ({{ e.count }}人)</span>
           </div>
         </div>
 

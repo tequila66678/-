@@ -9,7 +9,7 @@ from ..auth import get_current_admin, get_current_admin_flexible, get_super_admi
 from ..scoring import calculate_score, normalize_time_ms, parse_value
 import openpyxl
 from io import BytesIO
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 from collections import defaultdict
 
@@ -23,6 +23,19 @@ def _maybe_filter(query, model, sid):
     if sid is not None:
         return query.filter(model.school_id == sid)
     return query
+
+def _pick_best_in_window(scores, days=30):
+    """Keep best earned_score per (student_id, event_id) within the last `days` days.
+    Returns dict {(student_id, event_id): Score}"""
+    cutoff = date.today() - timedelta(days=days)
+    best = {}
+    for sc in scores:
+        if sc.test_date < cutoff:
+            continue
+        key = (sc.student_id, sc.event_id)
+        if key not in best or sc.earned_score > best[key].earned_score:
+            best[key] = sc
+    return best
 
 def _get_previous_score(db: Session, student_db_id: int, event_id: int, current_date: date) -> Optional[Score]:
     return (
@@ -296,11 +309,7 @@ def class_stats(
         scores_q = scores_q.filter(Score.event_id.in_(event_id_list))
 
     all_scores = scores_q.order_by(Score.test_date.desc()).all()
-    latest = {}
-    for sc in all_scores:
-        key = (sc.student_id, sc.event_id)
-        if key not in latest:
-            latest[key] = sc
+    best = _pick_best_in_window(all_scores)
 
     events = db.query(SportEvent).filter(SportEvent.school_id == sid).all()
     if event_id_list:
@@ -308,22 +317,22 @@ def class_stats(
 
     event_scores = defaultdict(list)
     student_totals = defaultdict(list)
-    for (sid, eid), sc in latest.items():
+    for (_sid, eid), sc in best.items():
         event_scores[eid].append(sc.earned_score)
-        student_totals[sid].append(sc.earned_score)
+        student_totals[_sid].append(sc.earned_score)
 
     event_avgs = []
     for e in events:
         scores_list = event_scores.get(e.id, [])
         avg = sum(scores_list) / len(scores_list) if scores_list else 0
-        event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1)})
+        event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
 
     total_scores = [sum(v) for v in student_totals.values() if v]
     max_per_student = len(events)
+    n_participants = len(student_totals)
     overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
     excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
     pass_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 6)
-    n_students = len(student_totals)
 
     warning_students = []
     for s in students:
@@ -349,10 +358,11 @@ def class_stats(
     return {
         "class_id": class_id,
         "class_name": f"{cls.grade}{cls.name}",
-        "total_students": n_students,
+        "total_students": len(students),
+        "participants": n_participants,
         "avg_score": round(overall_avg, 1),
-        "excellent_rate": round(excellent_count / n_students * 100, 1) if n_students else 0,
-        "pass_rate": round(pass_count / n_students * 100, 1) if n_students else 0,
+        "excellent_rate": round(excellent_count / n_participants * 100, 1) if n_participants else 0,
+        "pass_rate": round(pass_count / n_participants * 100, 1) if n_participants else 0,
         "event_avgs": event_avgs,
         "warning_students": warning_students
     }
@@ -538,19 +548,15 @@ def school_stats(
     all_students = db.query(Student).join(Class).filter(Class.school_id == sid).all()
     all_scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
 
-    # Latest per student per event
-    latest = {}
-    for sc in all_scores:
-        key = (sc.student_id, sc.event_id)
-        if key not in latest:
-            latest[key] = sc
+    # Best score per student per event within last 30 days
+    best = _pick_best_in_window(all_scores)
 
     event_scores = defaultdict(list)
     student_totals = defaultdict(list)
-    for (sid, eid), sc in latest.items():
+    for (_sid, eid), sc in best.items():
         if eid in [e.id for e in events]:
             event_scores[eid].append(sc.earned_score)
-            student_totals[sid].append(sc.earned_score)
+            student_totals[_sid].append(sc.earned_score)
 
     event_avgs = []
     for e in events:
@@ -559,7 +565,7 @@ def school_stats(
         event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
 
     total_scores = [sum(v) for v in student_totals.values() if v]
-    n_students = len(student_totals)
+    n_participants = len(student_totals)
     max_per_student = len(events)
     overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
     excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
@@ -578,7 +584,8 @@ def school_stats(
         cls_avg = cls_total / (cls_count * max_per_student) * 10 if cls_count > 0 and max_per_student > 0 else 0
         class_summaries.append({
             "class_id": cls.id, "class_name": f"{cls.grade}{cls.name}",
-            "students": len(cls_students), "avg_score": round(cls_avg, 1)
+            "students": len(cls_students), "participants": cls_count,
+            "avg_score": round(cls_avg, 1)
         })
 
     warning_students = []
@@ -599,11 +606,12 @@ def school_stats(
                     })
 
     return {
-        "total_students": n_students,
+        "total_students": len(all_students),
         "total_classes": len(class_summaries),
+        "participants": n_participants,
         "avg_score": round(overall_avg, 1),
-        "excellent_rate": round(excellent_count / n_students * 100, 1) if n_students else 0,
-        "pass_rate": round(pass_count / n_students * 100, 1) if n_students else 0,
+        "excellent_rate": round(excellent_count / n_participants * 100, 1) if n_participants else 0,
+        "pass_rate": round(pass_count / n_participants * 100, 1) if n_participants else 0,
         "event_avgs": event_avgs,
         "class_summaries": class_summaries,
         "warning_students": warning_students
@@ -627,12 +635,8 @@ def grade_stats(
     all_classes = db.query(Class).filter(Class.school_id == sid).order_by(Class.grade, Class.name).all()
     all_scores = db.query(Score).filter(Score.school_id == sid).order_by(Score.test_date.desc()).all()
 
-    # Latest per student per event
-    latest = {}
-    for sc in all_scores:
-        key = (sc.student_id, sc.event_id)
-        if key not in latest:
-            latest[key] = sc
+    # Best score per student per event within last 30 days
+    best = _pick_best_in_window(all_scores)
 
     # Group classes by grade
     grade_classes = defaultdict(list)
@@ -650,7 +654,7 @@ def grade_stats(
 
         event_scores = defaultdict(list)
         student_totals = defaultdict(list)
-        for (st_id, eid), sc in latest.items():
+        for (st_id, eid), sc in best.items():
             if st_id in grade_student_ids and eid in [e.id for e in events]:
                 event_scores[eid].append(sc.earned_score)
                 student_totals[st_id].append(sc.earned_score)
@@ -662,7 +666,7 @@ def grade_stats(
             event_avgs.append({"event_id": e.id, "event_name": e.name, "avg_score": round(avg, 1), "count": len(scores_list)})
 
         total_scores = [sum(v) for v in student_totals.values() if v]
-        n_students = len(student_totals)
+        n_participants = len(student_totals)
         max_per_student = len(events)
         overall_avg = sum(total_scores) / len(total_scores) if total_scores else 0
         excellent_count = sum(1 for t in total_scores if max_per_student > 0 and t / max_per_student >= 9)
@@ -680,7 +684,8 @@ def grade_stats(
             cls_avg = cls_total / (cls_count * max_per_student) * 10 if cls_count > 0 and max_per_student > 0 else 0
             class_summaries.append({
                 "class_id": cls.id, "class_name": f"{cls.grade}{cls.name}",
-                "students": len(cls_students), "avg_score": round(cls_avg, 1)
+                "students": len(cls_students), "participants": cls_count,
+                "avg_score": round(cls_avg, 1)
             })
 
         warning_students = []
@@ -708,11 +713,12 @@ def grade_stats(
 
         result.append({
             "grade": grade_name,
-            "total_students": n_students,
+            "total_students": len(grade_students),
             "total_classes": len(classes_in_grade),
+            "participants": n_participants,
             "avg_score": round(overall_avg, 1),
-            "excellent_rate": round(excellent_count / n_students * 100, 1) if n_students else 0,
-            "pass_rate": round(pass_count / n_students * 100, 1) if n_students else 0,
+            "excellent_rate": round(excellent_count / n_participants * 100, 1) if n_participants else 0,
+            "pass_rate": round(pass_count / n_participants * 100, 1) if n_participants else 0,
             "event_avgs": event_avgs,
             "class_summaries": class_summaries,
             "warning_students": warning_students[:10]
