@@ -24,8 +24,8 @@
         <el-menu-item index="/admin/statistics">
           <el-icon><TrendCharts /></el-icon> 统计分析
         </el-menu-item>
-        <el-menu-item v-if="adminInfo?.is_super" index="/admin/settings">
-          <el-icon><Setting /></el-icon> 开发人员选项
+        <el-menu-item v-if="adminInfo?.role !== 'teacher'" index="/admin/settings">
+          <el-icon><Setting /></el-icon> 系统设置
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -41,7 +41,7 @@
         <div class="topbar-right">
           <!-- School switcher for super-admin -->
           <el-select
-            v-if="adminInfo?.is_super"
+            v-if="adminInfo?.role === 'super'"
             v-model="currentSchoolId"
             size="small"
             class="school-switch"
@@ -88,7 +88,7 @@ onMounted(async () => {
     const res = await api.get('/config/public')
     schoolName.value = res.data.school_name || '体育成绩管理系统'
   } catch {}
-  if (adminInfo.value?.is_super) {
+  if (adminInfo.value?.role === 'super') {
     try {
       const res = await api.get('/schools')
       schools.value = res.data

@@ -41,7 +41,11 @@ async function login() {
     const res = await api.post('/auth/login', { username: username.value, password: password.value })
     localStorage.setItem('admin_token', res.data.access_token)
     localStorage.setItem('admin_info', JSON.stringify(res.data.admin))
-    router.push('/admin/dashboard')
+    if (res.data.admin.role === 'super') {
+      router.push('/admin/select-school')
+    } else {
+      router.push('/admin/dashboard')
+    }
   } catch { ElMessage.error('用户名或密码错误') } finally { loading.value = false }
 }
 </script>

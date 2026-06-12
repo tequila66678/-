@@ -5,7 +5,7 @@ from sqlalchemy import text
 from ..database import get_db
 from ..models import Score, Student, SportEvent, ScoringStandard, Class, Admin, SystemConfig, InputFormat, Gender
 from ..schemas import ScoreBatchSave, ScoreWithChange, ClearAllRequest
-from ..auth import get_current_admin, get_current_admin_flexible, get_super_admin, require_school, verify_password
+from ..auth import get_current_admin, get_current_admin_flexible, get_super_admin, get_school_admin, require_school, verify_password
 from ..scoring import calculate_score, normalize_time_ms, parse_value
 import openpyxl
 from io import BytesIO
@@ -126,6 +126,104 @@ def batch_save_scores(
 
     db.commit()
     return results
+
+@router.post("/batch-import")
+def batch_import_scores(
+    class_id: int = Query(...),
+    test_date: str = Query(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current: Admin = Depends(get_current_admin)
+):
+    """Import scores from Excel. Col A=student_id, Col B=name, Col C+=event names as headers."""
+    sid = _get_admin_school(current)
+
+    cls = db.query(Class).filter(Class.id == class_id, Class.school_id == sid).first()
+    if not cls:
+        raise HTTPException(404, "班级不存在")
+
+    test_dt = date.fromisoformat(test_date)
+
+    try:
+        wb = openpyxl.load_workbook(file.file, data_only=True)
+        ws = wb.active
+    except Exception:
+        raise HTTPException(400, "无法读取Excel文件")
+
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 2:
+        raise HTTPException(400, "Excel文件为空或无数据行")
+
+    headers = [str(h).strip() if h else "" for h in rows[0]]
+    if len(headers) < 2:
+        raise HTTPException(400, "表头至少需要学号和姓名两列")
+
+    # Match header columns to sport events (columns C+)
+    events = db.query(SportEvent).filter(SportEvent.school_id == sid).all()
+    col_event_map = {}  # col_idx -> SportEvent
+    for col_idx, h in enumerate(headers):
+        if col_idx < 2:
+            continue  # skip 学号, 姓名
+        for e in events:
+            if h == e.name:
+                col_event_map[col_idx] = e
+                break
+
+    if not col_event_map:
+        raise HTTPException(400, "未找到匹配的体育项目，请检查表头是否包含项目名称")
+
+    # Preload class students for matching
+    students = db.query(Student).filter(Student.class_id == class_id).all()
+    student_map = {s.student_id: s for s in students}
+
+    imported = 0
+    skipped = []
+    for row_idx, row in enumerate(rows[1:], start=2):
+        student_id = str(row[0]).strip() if row[0] else ""
+        student = student_map.get(student_id)
+        if not student:
+            skipped.append(f"行{row_idx}: 学号{student_id}不在本班")
+            continue
+
+        for col_idx, event in col_event_map.items():
+            raw_value = row[col_idx]
+            if raw_value is None or str(raw_value).strip() == "":
+                continue
+            raw_value = str(raw_value).strip()
+
+            # Normalize time formats
+            if event.input_format == InputFormat.time_ms:
+                raw_value = normalize_time_ms(raw_value)
+
+            standards = db.query(ScoringStandard).filter(
+                ScoringStandard.event_id == event.id
+            ).all()
+            earned = calculate_score(raw_value, event, standards, student.gender.value)
+
+            # Upsert
+            existing = db.query(Score).filter(
+                Score.student_id == student.id,
+                Score.event_id == event.id,
+                Score.test_date == test_dt
+            ).first()
+            if existing:
+                existing.raw_value = raw_value
+                existing.earned_score = earned
+                existing.recorder_id = current.id
+            else:
+                db.add(Score(
+                    student_id=student.id,
+                    event_id=event.id,
+                    raw_value=raw_value,
+                    earned_score=earned,
+                    test_date=test_dt,
+                    recorder_id=current.id,
+                    school_id=sid
+                ))
+            imported += 1
+
+    db.commit()
+    return {"ok": True, "imported": imported, "skipped": skipped}
 
 @router.delete("/{score_id}")
 def delete_score(score_id: int, db: Session = Depends(get_db), current: Admin = Depends(get_current_admin)):
@@ -675,7 +773,7 @@ def get_class_students(
     return [{"id": s.id, "student_id": s.student_id, "name": s.name, "gender": s.gender.value} for s in students]
 
 @router.get("/backup-all")
-def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_current_admin_flexible)):
+def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_school_admin)):
     """Backup current school data as Excel (7 sheets)."""
     sid = _get_admin_school(current)
     wb = openpyxl.Workbook()
@@ -740,7 +838,7 @@ def backup_all_data(db: Session = Depends(get_db), current: Admin = Depends(get_
 def restore_all_data(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current: Admin = Depends(get_current_admin)
+    current: Admin = Depends(get_school_admin)
 ):
     """Restore current school data from backup Excel file."""
     sid = _get_admin_school(current)

@@ -16,7 +16,7 @@ def login(data: AdminLogin, db: Session = Depends(get_db)):
     out = AdminOut.model_validate(admin)
     if admin.school:
         out.school_name = admin.school.name
-    elif admin.is_super:
+    elif admin.role == "super":
         out.school_name = "平台管理"
     return TokenOut(access_token=token, admin=out)
 
@@ -33,7 +33,7 @@ def switch_school(
     db: Session = Depends(get_db),
     current: Admin = Depends(get_current_admin)
 ):
-    if not current.is_super:
+    if current.role != "super":
         raise HTTPException(403, "仅超级管理员可切换学校")
     token = create_jwt(current.id, current.username, data.school_id)
     current.current_school_id = data.school_id

@@ -12,7 +12,8 @@ class AdminOut(BaseModel):
     id: int
     username: str
     display_name: str
-    is_super: bool
+    is_super: bool = False  # deprecated, kept for backward compat with frontend
+    role: str = "teacher"
     school_id: Optional[int] = None
     school_name: Optional[str] = None
     model_config = {"from_attributes": True}
@@ -146,7 +147,8 @@ class AdminCreate(BaseModel):
     username: str
     password: str
     display_name: str
-    is_super: bool = False
+    is_super: bool = False  # deprecated, use role
+    role: str = "teacher"
     school_id: Optional[int] = None
 
 class AdminUpdate(BaseModel):

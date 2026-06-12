@@ -3,7 +3,7 @@
     <el-button text @click="$router.push('/admin/dashboard')" class="back-btn">← 返回仪表盘</el-button>
     <h3 style="margin:8px 0 12px">开发人员选项</h3>
     <el-tabs v-model="activeTab">
-      <el-tab-pane label="项目设置" name="events">
+      <el-tab-pane v-if="isSuper" label="项目设置" name="events">
         <el-button size="small" @click="showAddEvent = true" style="margin-bottom:8px">新增项目</el-button>
         <div v-for="e in events" :key="e.id" class="event-card">
           <div class="ec-info">
@@ -54,7 +54,7 @@
         <div v-for="a in admins" :key="a.id" class="admin-card">
           <div>
             <div class="ad-name">{{ a.display_name }}</div>
-            <div class="ad-role">{{ a.username }} | {{ a.is_super ? '超管' : '老师' }}</div>
+            <div class="ad-role">{{ a.username }} | {{ a.role === 'super' ? '超管' : a.role === 'school_admin' ? '学校管理员' : '老师' }}</div>
           </div>
           <el-button text type="danger" size="small" @click="deleteAdmin(a)">删除</el-button>
         </div>
@@ -65,11 +65,13 @@
             <el-form-item label="密码"><el-input v-model="newAdmin.password" type="password" /></el-form-item>
             <el-form-item label="姓名"><el-input v-model="newAdmin.display_name" /></el-form-item>
             <el-form-item label="角色">
-              <el-select v-model="newAdmin.is_super" style="width:100%">
-                <el-option label="老师" :value="false" /><el-option label="超管" :value="true" />
+              <el-select v-model="newAdmin.role" style="width:100%">
+                <el-option v-if="isSuper" label="超管" value="super" />
+                <el-option v-if="isSuper" label="学校管理员" value="school_admin" />
+                <el-option label="老师" value="teacher" />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="!newAdmin.is_super" label="学校">
+            <el-form-item v-if="isSuper && newAdmin.role !== 'super'" label="学校">
               <el-select v-model="newAdmin.school_id" style="width:100%" placeholder="选择学校">
                 <el-option v-for="s in allSchools" :key="s.id" :value="s.id" :label="s.name" />
               </el-select>
@@ -79,7 +81,7 @@
         </el-dialog>
       </el-tab-pane>
 
-      <el-tab-pane label="学校管理" name="schools">
+      <el-tab-pane v-if="isSuper" label="学校管理" name="schools">
         <el-button size="small" @click="showAddSchool = true" style="margin-bottom:8px">新建学校</el-button>
         <div v-for="s in allSchools" :key="s.id" class="admin-card">
           <div>
@@ -143,7 +145,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 
-const activeTab = ref('events')
+const activeTab = ref(isSuper ? 'events' : 'admins')
 const events = ref([])
 const admins = ref([])
 const config = ref({ school_name: '', praise_threshold: 1, warning_threshold: 2, designer: '' })
@@ -155,8 +157,11 @@ const editingEventId = ref(null)
 const standardsForm = ref(Array(10).fill(''))
 
 const showAddAdmin = ref(false)
-const newAdmin = ref({ username: '', password: '', display_name: '', is_super: false, school_id: null })
+const newAdmin = ref({ username: '', password: '', display_name: '', role: 'teacher', school_id: null })
 const allSchools = ref([])
+
+const adminInfo = JSON.parse(localStorage.getItem('admin_info') || '{}')
+const isSuper = adminInfo.role === 'super'
 
 onMounted(async () => {
   const [eRes, aRes, cRes] = await Promise.all([api.get('/events'), api.get('/admins'), api.get('/config')])

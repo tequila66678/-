@@ -46,8 +46,14 @@ def get_current_admin(
     return admin
 
 def get_super_admin(current: Admin = Depends(get_current_admin)) -> Admin:
-    if not current.is_super:
+    if current.role != "super":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要超级管理员权限")
+    return current
+
+def get_school_admin(current: Admin = Depends(get_current_admin)) -> Admin:
+    """Super admin or school admin — for settings page access."""
+    if current.role not in ("super", "school_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要学校管理员权限")
     return current
 
 def get_school_id(
@@ -65,7 +71,7 @@ def require_school(current: Admin = Depends(get_current_admin)) -> Optional[int]
     Super-admin with no school → None (see all schools).
     Regular admin with no school → error."""
     sid = getattr(current, "current_school_id", None)
-    if sid is None and not current.is_super:
+    if sid is None and current.role != "super":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先选择学校")
     return sid  # None for super-admin = see all schools
 

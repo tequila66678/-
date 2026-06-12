@@ -81,7 +81,8 @@ class Admin(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    is_super = Column(Boolean, default=False)
+    is_super = Column(Boolean, default=False)  # deprecated, use role instead
+    role = Column(String(20), nullable=False, default='teacher')  # 'super' | 'school_admin' | 'teacher'
     display_name = Column(String, nullable=False)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=True)
     school = relationship("School")

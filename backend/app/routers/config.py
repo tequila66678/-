@@ -4,12 +4,12 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import SystemConfig, Admin
 from ..schemas import ConfigUpdate, ConfigOut
-from ..auth import get_super_admin, require_school
+from ..auth import get_school_admin, require_school
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 @router.get("", response_model=list[ConfigOut])
-def list_config(db: Session = Depends(get_db), current: Admin = Depends(get_super_admin)):
+def list_config(db: Session = Depends(get_db), current: Admin = Depends(get_school_admin)):
     sid = require_school(current)
     return db.query(SystemConfig).filter(SystemConfig.school_id == sid).all()
 
@@ -32,7 +32,7 @@ def get_public_config(school_id: Optional[int] = None, db: Session = Depends(get
     return result
 
 @router.put("/{key}")
-def update_config(key: str, data: ConfigUpdate, db: Session = Depends(get_db), current: Admin = Depends(get_super_admin)):
+def update_config(key: str, data: ConfigUpdate, db: Session = Depends(get_db), current: Admin = Depends(get_school_admin)):
     sid = require_school(current)
     config = db.query(SystemConfig).filter(
         SystemConfig.key == key, SystemConfig.school_id == sid

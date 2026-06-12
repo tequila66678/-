@@ -22,8 +22,17 @@
             <el-date-picker v-model="testDate" type="date" value-format="YYYY-MM-DD" size="large" style="width:100%" />
           </el-form-item>
           <el-button type="primary" size="large" @click="startEntry" :disabled="!selectedClassId || !selectedEventId" class="se-start-btn">
-            开始录入
+            开始逐人录入
           </el-button>
+          <div style="margin-top:12px;text-align:center">
+            <input type="file" ref="batchFile" accept=".xlsx" style="display:none" @change="batchImport" />
+            <el-button :disabled="!selectedClassId" @click="$refs.batchFile.click()" style="width:100%">
+              📊 批量导入成绩
+            </el-button>
+            <div style="font-size:11px;color:#999;margin-top:4px">
+              Excel格式：学号 | 姓名 | 项目1 | 项目2 ...
+            </div>
+          </div>
         </el-form>
       </div>
     </div>
@@ -162,6 +171,33 @@ async function onValueChange() {
     currentScore.value = r.earned_score; previousScore.value = r.previous_score
     change.value = r.change; isPraise.value = r.is_praise; isWarning.value = r.is_warning
   } catch { currentScore.value = null }
+}
+
+async function batchImport(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  const loading = ElMessage({ message: '正在导入成绩...', type: 'info', duration: 0 })
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const params = { class_id: selectedClassId.value, test_date: testDate.value }
+    const res = await api.post('/scores/batch-import', form, { params })
+    loading.close()
+    const r = res.data
+    let msg = `导入成功：${r.imported} 条成绩`
+    if (r.skipped.length) msg += `，${r.skipped.length} 条跳过`
+    ElMessage.success({ message: msg, duration: 5000 })
+    if (r.skipped.length > 0 && r.skipped.length <= 20) {
+      setTimeout(() => {
+        ElMessage.warning({ message: r.skipped.join('；'), duration: 8000 })
+      }, 500)
+    }
+    // Clear file input
+    e.target.value = ''
+  } catch (err) {
+    loading.close()
+    ElMessage.error(err.response?.data?.detail || '导入失败')
+  }
 }
 
 async function saveAndNext() {

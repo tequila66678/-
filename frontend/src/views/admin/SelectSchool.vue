@@ -29,7 +29,7 @@ onMounted(async () => {
   const info = localStorage.getItem('admin_info')
   if (info) {
     const admin = JSON.parse(info)
-    if (!admin.is_super) {
+    if (admin.role !== 'super') {
       router.push('/admin/dashboard')
       return
     }

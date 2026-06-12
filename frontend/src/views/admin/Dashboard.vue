@@ -17,7 +17,7 @@
         <div class="dc-title">统计分析</div>
         <div class="dc-desc">班级 & 个人统计</div>
       </div>
-      <div v-if="adminInfo?.is_super" class="dash-card" @click="$router.push('/admin/settings')">
+      <div v-if="adminInfo?.role !== 'teacher'" class="dash-card" @click="$router.push('/admin/settings')">
         <div class="dc-icon">⚙️</div>
         <div class="dc-title">系统设置</div>
         <div class="dc-desc">项目 / 标准 / 管理员</div>

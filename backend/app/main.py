@@ -85,6 +85,15 @@ def startup():
             """))
             conn.commit()
 
+    # Add role column to admins if missing
+    if "admins" in table_names:
+        cols = [c["name"] for c in insp.get_columns("admins")]
+        if "role" not in cols:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE admins ADD COLUMN role VARCHAR(20) DEFAULT 'teacher'"))
+                conn.execute(text("UPDATE admins SET role = 'super' WHERE is_super = true"))
+                conn.commit()
+
     # Check and add school_id columns to existing tables
     for tbl, nullable in [("classes", False), ("sport_events", False), ("scores", False), ("admins", True), ("system_config", False)]:
         if tbl in table_names:

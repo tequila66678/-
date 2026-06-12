@@ -102,6 +102,7 @@ def seed():
         username="admin",
         password_hash=hash_password("admin123"),
         is_super=True,
+        role="super",
         display_name="超级管理员",
         school_id=None
     )
